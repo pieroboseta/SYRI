@@ -42,6 +42,9 @@ migrate_working_dir/
 /Releases/
 /Exported Icons/
 /research/
+# Local planning notes; keep public documentation focused on released features.
+/TODO.md
+/docs/SYRI_DATA_SOURCES_RESEARCH.md
 /*.png
 /*.jpg
 /*.html

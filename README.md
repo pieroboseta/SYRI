@@ -20,16 +20,16 @@
   <sub>Versioni më i fundit · shkarkim direkt nga GitHub Releases</sub>
 </p>
 
-## Çfarë mund të bësh
+## ✨ Çfarë mund të bësh
 
-| Në hartë | Në aplikacion |
+| 🗺️ Në hartë | 📱 Në aplikacion |
 | --- | --- |
 | Shiko lajme, alarme, mot, ujëra, territor, transport, kamera dhe kanale televizive sipas shtresave që zgjedh. | Zgjidh qytetin, ruaj të preferuarat dhe merr përmbledhjen **SYRI Tani** me motin, parashikimin shtatëditor dhe raportimet pranë tij. |
 | Prek ikonat për hollësi, kohën e raportimit dhe lidhjen te burimi origjinal. | Te **Ngjarjet** shiko raportimet kryesore; te **Cilësimet** rregullo gjuhën, vendet, shtresat, njoftimet dhe madhësinë e ikonave. |
 
 Zgjedhjet e kategorive ruhen në pajisje. Harta dhe informacioni i hapur më parë mund të mbeten të disponueshëm nga cache kur je offline; kjo **nuk** do të thotë se e gjithë harta është e shkarkuar për përdorim offline. Burimet e jashtme ndryshojnë sipas vendit dhe mund të vonohen ose të mos jenë përkohësisht të disponueshme.
 
-## Fillo me SYRI
+## 🧭 Fillo me SYRI
 
 1. Prek qytetin në krye të ekranit për të zgjedhur vendin tënd; mund t’i shënosh qytetet e përdorura shpesh me yll.
 2. Prek emrin ose ikonën e një kategorie për të aktivizuar shtresat e saj. Prek vetëm shigjetën për të hapur nënkategoritë dhe për t’i zgjedhur një nga një.
@@ -37,17 +37,17 @@ Zgjedhjet e kategorive ruhen në pajisje. Harta dhe informacioni i hapur më par
 4. Përdor butonin e zgjedhjes së kategorive në hartë për të ruajtur shtresat që dëshiron të shfaqen edhe herën tjetër.
 5. Për udhëzime të ilustruara, hap **Cilësimet → Si të përdorësh SYRI-n**.
 
-## Pamje nga aplikacioni
+## 🖼️ Pamje nga aplikacioni
 
-| Harta dhe lajmet | Ngjarjet | SYRI Tani |
-| --- | --- | --- |
-| ![Harta me lajme](docs/screenshots/news.png) | ![Ngjarjet](docs/screenshots/events.png) | ![Përmbledhja SYRI Tani](docs/screenshots/syri-now.png) |
+| Harta dhe lajmet | Ngjarjet |
+| :---: | :---: |
+| <img src="docs/screenshots/news.png" alt="Harta me lajme" width="160"> | <img src="docs/screenshots/events.png" alt="Ngjarjet" width="160"> |
+| SYRI Tani | Cilësimet |
+| <img src="docs/screenshots/syri-now.png" alt="Përmbledhja SYRI Tani" width="160"> | <img src="docs/screenshots/settings.png" alt="Cilësimet" width="160"> |
+| Mbështet SYRI-n | |
+| <img src="docs/screenshots/support.png" alt="Faqja e mbështetjes" width="160"> | |
 
-| Cilësimet | Mbështet SYRI-n |
-| --- | --- |
-| ![Cilësimet](docs/screenshots/settings.png) | ![Faqja e mbështetjes](docs/screenshots/support.png) |
-
-## Shkarkimi dhe instalimi në Android
+## ⬇️ Shkarkimi dhe instalimi në Android
 
 **[⬇ Shkarko direkt SYRI-Android.apk](https://github.com/pieroboseta/SYRI/releases/latest/download/SYRI-Android.apk)** · [Shiko versionet e publikuara](https://github.com/pieroboseta/SYRI/releases)
 
@@ -59,11 +59,11 @@ Lejen e instalimit jepja vetëm aplikacionit nga i cili po hap APK-në. Mund ta 
 
 Për të parë nëse ka version të ri, hap **Cilësimet → Përditësimi → Rifresko**. Kur del version i ri, butoni i shkarkimit hap publikimin përkatës në GitHub. SYRI kontrollon edhe periodikisht kur ka internet dhe mund të shfaqë një njoftim në aplikacion ose një njoftim Android, nëse i ke dhënë lejen e njoftimeve. Kontrolli në sfond varet nga kufizimet e Android-it dhe nuk kryhet domosdoshmërisht në të njëjtën orë çdo ditë. Përditësimi instalohet nga APK-ja e GitHub; aplikacioni nuk e instalon vetë.
 
-## Burimet dhe kufizimet
+## 🌐 Burimet dhe kufizimet
 
 SYRI shfaq informacion nga shërbime publike dhe burime të jashtme. Kur burimi dhe koha e përditësimit janë të disponueshme, aplikacioni i shënon. Për vendime të rëndësishme, veçanërisht gjatë emergjencave, kontrollo gjithmonë njoftimin origjinal. Mbulimi nuk është identik në të katër vendet për çdo shtresë. Shih [SOURCES.md](SOURCES.md) për burimet, kufizimet dhe statusin e integrimeve.
 
-## Zhvillimi dhe licenca
+## 🛠️ Zhvillimi dhe licenca
 
 Projekti është ndërtuar me Flutter. Pas instalimit të Flutter dhe Android SDK, përdor `flutter pub get` dhe `flutter run` nga rrënja e projektit. Kontrollet kryesore janë `flutter test` dhe `flutter analyze`.
 
