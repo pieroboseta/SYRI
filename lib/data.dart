@@ -351,6 +351,7 @@ class Event {
   final DateTime? time;
   final bool approximate;
   final double? heading, speedKnots;
+  final Map<String, double>? measurements;
   final List<LatLng>? geometry;
   const Event({
     required this.id,
@@ -365,6 +366,7 @@ class Event {
     this.approximate = false,
     this.heading,
     this.speedKnots,
+    this.measurements,
     this.geometry,
   });
 

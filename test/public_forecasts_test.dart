@@ -33,6 +33,8 @@ void main() {
     expect(reading.value.single.title, contains('Mjegull'));
     expect(reading.value.single.description, contains('90%'));
     expect(reading.value.single.point, cities.first.point);
+    expect(reading.value.single.measurements?['cloud'], 90);
+    expect(reading.value.single.measurements?['visibility'], 700);
     expect(reading.value.single.dataMode, 'PARASHIKIM');
     api.client.close();
   });

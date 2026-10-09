@@ -53,6 +53,13 @@ extension PublicForecasts on SyriApi {
             kind: 'sky-conditions',
             point: place.point,
             approximate: true,
+            measurements: {
+              'cloud': cloud.toDouble(),
+              'visibility': visibility.toDouble(),
+              'wind': wind.toDouble(),
+              if (gust != null) 'gust': gust.toDouble(),
+              if (direction != null) 'direction': direction.toDouble(),
+            },
           ),
         );
       }

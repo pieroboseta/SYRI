@@ -21,6 +21,7 @@ import 'package:workmanager/workmanager.dart';
 
 import 'data.dart';
 import 'public_forecasts.dart';
+import 'sky_overlay.dart';
 import 'app_updates.dart';
 import 'country_silhouettes.dart';
 import 'map_markers.dart';
@@ -2949,8 +2950,6 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     if (enabled.contains('river-levels')) ...?results['river-levels']?.value,
     if (enabled.contains('river-forecast'))
       ...?results['river-forecast']?.value,
-    if (enabled.contains('sky-conditions'))
-      ...?results['sky-conditions']?.value,
     if (enabled.contains('places')) ...?results['places']?.value,
     if (enabled.contains('cems')) ...?results['cems']?.value,
     if (enabled.contains('health-alerts')) ...?results['health-alerts']?.value,
@@ -4829,6 +4828,9 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
                         duration: Duration(milliseconds: 250),
                       ),
                     ),
+                  if (enabled.contains('sky-conditions') &&
+                      results['sky-conditions']?.value.isNotEmpty == true)
+                    SkyOverlayLayer(results['sky-conditions']!.value),
                   if (!overview &&
                       enabled.contains('water') &&
                       results['water']?.value.any(
@@ -5483,6 +5485,15 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     refresh?.call();
   }
 
+  Event? get _selectedSkyReading {
+    final readings = results['sky-conditions']?.value;
+    if (readings == null || readings.isEmpty) return null;
+    for (final reading in readings) {
+      if (reading.id == 'sky-${city.name}') return reading;
+    }
+    return readings.first;
+  }
+
   List<Widget> _mapLegendWidgets([VoidCallback? refresh]) => [
     if (enabled.contains('solar-activity') &&
         results['solar-activity']?.value.isNotEmpty == true &&
@@ -5543,32 +5554,65 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
               color: Colors.lightBlueAccent.withValues(alpha: .45),
             ),
           ),
-          child: Row(
+          child: Column(
             children: [
-              const Icon(
-                Icons.cloud_queue,
-                color: Colors.lightBlueAccent,
-                size: 18,
+              Row(
+                children: [
+                  const Icon(
+                    Icons.cloud_queue,
+                    color: Colors.lightBlueAccent,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 7),
+                  AppText(
+                    _ui(
+                      'Re/mjegull/erë +$skyHoursAhead h',
+                      'Cloud/fog/wind +$skyHoursAhead h',
+                    ),
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  Expanded(
+                    child: Slider(
+                      value: skyHoursAhead.toDouble(),
+                      min: 0,
+                      max: 6,
+                      divisions: 6,
+                      activeColor: Colors.lightBlueAccent,
+                      onChanged: (value) =>
+                          setState(() => skyHoursAhead = value.round()),
+                      onChangeEnd: (_) =>
+                          unawaited(_loadLayer('sky-conditions')),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 7),
+              if (_selectedSkyReading case final reading?) ...[
+                InkWell(
+                  onTap: () => _eventDetails(reading),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: AppText(
+                            '${reading.title} · ${(reading.measurements?['cloud'] ?? 0).round()}% · ${(reading.measurements?['wind'] ?? 0).round()} km/h',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 11, color: muted),
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right, size: 16, color: muted),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               AppText(
                 _ui(
-                  'Re/mjegull/erë +$skyHoursAhead h',
-                  'Cloud/fog/wind +$skyHoursAhead h',
+                  'E bardhë: re · cian: mjegull · shigjetat: erë',
+                  'White: cloud · cyan: fog · arrows: wind',
                 ),
-                style: const TextStyle(fontSize: 11),
-              ),
-              Expanded(
-                child: Slider(
-                  value: skyHoursAhead.toDouble(),
-                  min: 0,
-                  max: 6,
-                  divisions: 6,
-                  activeColor: Colors.lightBlueAccent,
-                  onChanged: (value) =>
-                      setState(() => skyHoursAhead = value.round()),
-                  onChangeEnd: (_) => unawaited(_loadLayer('sky-conditions')),
-                ),
+                style: const TextStyle(fontSize: 10, color: muted),
               ),
             ],
           ),

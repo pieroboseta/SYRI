@@ -29,7 +29,7 @@
 
 Zgjedhjet e kategorive ruhen në pajisje. Harta dhe informacioni i hapur më parë mund të mbeten të disponueshëm nga cache kur je offline; kjo **nuk** do të thotë se e gjithë harta është e shkarkuar për përdorim offline. Burimet e jashtme ndryshojnë sipas vendit dhe mund të vonohen ose të mos jenë përkohësisht të disponueshme.
 
-Te **Moti** mund të shohësh retë, dukshmërinë/mjegullën dhe erën për qytetet e vendeve të aktivizuara, me zgjedhje të orës për gjashtë orët e ardhshme. Te **Ujërat** shfaqet parashikimi shtatëditor i prurjes në pika modeli pranë qyteteve; nuk është matje e stacionit apo paralajmërim përmbytjeje. Te **Alarmet** aktiviteti diellor i NOAA shfaqet si gjendje globale, pa pretenduar ndikim të konfirmuar në një qytet.
+Te **Moti** mund të shohësh një shtresë të tejdukshme për retë, mjegullën dhe drejtimin e erës, të bazuar në parashikimet e qyteteve të vendeve të aktivizuara. Te Legjenda zgjedh orën për gjashtë orët e ardhshme dhe hap shifrat e qytetit. Te **Ujërat** shfaqet parashikimi shtatëditor i prurjes në pika modeli pranë qyteteve; nuk është matje e stacionit apo paralajmërim përmbytjeje. Te **Alarmet** aktiviteti diellor i NOAA shfaqet si gjendje globale, pa pretenduar ndikim të konfirmuar në një qytet.
 
 ## 🧭 Fillo me SYRI
 
