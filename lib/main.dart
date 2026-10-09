@@ -19,6 +19,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:workmanager/workmanager.dart';
 
 import 'data.dart';
+import 'country_silhouettes.dart';
 import 'map_markers.dart';
 import 'background_notifications.dart';
 import 'notification_payload.dart';
@@ -155,6 +156,79 @@ const cityPickerCountryOrder = <String>[
   'Mali i Zi',
   'Maqedonia e Veriut',
 ];
+
+class CountrySelectionCard extends StatelessWidget {
+  final String country;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const CountrySelectionCard({
+    super.key,
+    required this.country,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? mint : muted;
+    final label = syriEnglish
+        ? switch (country) {
+            'Shqipëri' => 'Albania',
+            'Kosovë' => 'Kosovo',
+            'Mali i Zi' => 'Montenegro',
+            _ => 'North Macedonia',
+          }
+        : country;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            decoration: BoxDecoration(
+              gradient: selected
+                  ? LinearGradient(colors: [mint.withValues(alpha: .16), panel])
+                  : null,
+              color: selected ? null : panel,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: selected ? mint.withValues(alpha: .72) : Colors.white12,
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 43,
+                  height: 43,
+                  child: CountrySilhouette(country: country, color: color),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: selected ? Colors.white : muted,
+                    fontSize: 12,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 List<City> orderedCitiesForPicker(
   Iterable<City> allCities,
@@ -1512,6 +1586,23 @@ LayerInfo infoFor(String id) {
   );
 }
 
+Color eventAccent(Event event) {
+  if (event.kind == 'news') {
+    return switch (event.newsType) {
+      'good' => Colors.greenAccent,
+      'crash' => Colors.orangeAccent,
+      'crime' || 'violence' => Colors.redAccent,
+      'death' => Colors.blueGrey,
+      'fire' => Colors.deepOrangeAccent,
+      'weather' => Colors.lightBlueAccent,
+      _ => const Color(0xff91b5ff),
+    };
+  }
+  return event.kind == 'water'
+      ? bathingWaterColor(event)
+      : infoFor(event.kind).color;
+}
+
 class _SwipeDismissSheet extends StatefulWidget {
   final Widget child;
   final Color accent;
@@ -1679,6 +1770,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
   FeedResult<RadarLayer>? radar;
   FeedResult<AirQuality>? airQuality;
   final regionalAirQuality = <String, FeedResult<AirQuality>>{};
+  bool largerMapIcons = false;
   FeedResult<MarineWeather>? marineWeather;
   LatLng? userPoint;
   int tab = 0;
@@ -2002,6 +2094,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
           prefs.getBool('setting_notification_quiet') ?? true;
       autoRefreshOnResume = prefs.getBool('setting_auto_refresh') ?? true;
       showLegends = prefs.getBool('setting_show_legends') ?? true;
+      largerMapIcons = prefs.getBool('setting_large_map_icons') ?? false;
       notificationMaxAgeMinutes =
           prefs.getInt('setting_notification_max_age') ?? 60;
       touristMode = prefs.getBool('setting_tourist_mode') ?? false;
@@ -2153,6 +2246,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     );
     await prefs.setBool('setting_auto_refresh', autoRefreshOnResume);
     await prefs.setBool('setting_show_legends', showLegends);
+    await prefs.setBool('setting_large_map_icons', largerMapIcons);
     await prefs.setInt(
       'setting_notification_max_age',
       notificationMaxAgeMinutes,
@@ -2955,7 +3049,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
 
   Future<void> _open(String value) async {
     final uri = Uri.tryParse(value);
-    if (uri == null || !{'http', 'https'}.contains(uri.scheme)) {
+    if (uri == null || !{'http', 'https', 'mailto'}.contains(uri.scheme)) {
       _toast('Lidhja nuk është e vlefshme.');
       return;
     }
@@ -3388,6 +3482,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
 
   Future<void> _loadAirQuality() async {
     final generation = cityGeneration;
+    if (enabled.contains('air')) unawaited(_loadRegionalAirQuality(generation));
     sourceCheckedAt['air'] = DateTime.now();
     failures.remove('air');
     try {
@@ -3401,9 +3496,6 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     } catch (_) {
       if (mounted) setState(() => failures.add('air'));
     }
-    if (mounted && generation == cityGeneration && enabled.contains('air')) {
-      unawaited(_loadRegionalAirQuality(generation));
-    }
   }
 
   Future<void> _loadRegionalAirQuality(int generation) async {
@@ -3413,9 +3505,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     final readings = await api.airQualityForCities(selected);
     if (mounted && generation == cityGeneration) {
       setState(() {
-        regionalAirQuality
-          ..clear()
-          ..addAll(readings);
+        regionalAirQuality.addAll(readings);
       });
     }
   }
@@ -3587,100 +3677,132 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
   );
 
   @override
-  Widget build(BuildContext context) => _showWelcome && !_mapShellReady
-      ? const SyriWelcomeOverlay()
-      : Stack(
-          fit: StackFit.expand,
-          children: [
-            Scaffold(
-              extendBody: true,
-              body: SafeArea(
-                bottom: false,
-                child: Column(
-                  children: [
-                    _topBar(),
-                    if (tab != 0 && _showOfflineNotice) _offlineNoticeChip(),
-                    if (tab != 0 && _weatherToastMessage != null)
-                      _weatherToastChip(),
-                    Expanded(
-                      child: IndexedStack(
-                        index: tab == 0 ? 0 : 1,
-                        children: [
-                          _mapPage(),
-                          tab == 1
-                              ? _eventsPage()
-                              : tab == 2
-                              ? _settingsPage()
-                              : _donatePage(),
-                        ],
-                      ),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final landscape = constraints.maxWidth > constraints.maxHeight;
+      return _showWelcome && !_mapShellReady
+          ? const SyriWelcomeOverlay()
+          : Stack(
+              fit: StackFit.expand,
+              children: [
+                Scaffold(
+                  extendBody: true,
+                  body: SafeArea(
+                    bottom: false,
+                    child: Row(
+                      children: [
+                        if (landscape) _dock(vertical: true),
+                        Expanded(
+                          child: Column(
+                            children: [
+                              _topBar(),
+                              if (tab != 0 && _showOfflineNotice)
+                                _offlineNoticeChip(),
+                              if (tab != 0 && _weatherToastMessage != null)
+                                _weatherToastChip(),
+                              Expanded(
+                                child: IndexedStack(
+                                  index: tab == 0 ? 0 : 1,
+                                  children: [
+                                    _mapPage(landscape: landscape),
+                                    tab == 1
+                                        ? _eventsPage()
+                                        : tab == 2
+                                        ? _settingsPage()
+                                        : _donatePage(),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  bottomNavigationBar: landscape ? null : _dock(),
+                ),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    ignoring: !_showWelcome,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 320),
+                      child: _showWelcome
+                          ? const SyriWelcomeOverlay(key: ValueKey('welcome'))
+                          : const SizedBox.shrink(
+                              key: ValueKey('welcome-hidden'),
+                            ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+    },
+  );
+
+  Widget _dock({bool vertical = false}) {
+    final items = [
+      _dockItem(0, Icons.map_outlined, Icons.map, _ui('Harta', 'Map')),
+      _dockItem(
+        1,
+        Icons.dynamic_feed_outlined,
+        Icons.dynamic_feed,
+        _ui('Ngjarje', 'Events'),
+      ),
+      _dockItem(
+        2,
+        Icons.settings_outlined,
+        Icons.settings,
+        _ui('Cilësime', 'Settings'),
+      ),
+      _dockItem(
+        3,
+        Icons.volunteer_activism_outlined,
+        Icons.volunteer_activism,
+        _ui('Mbështet', 'Support'),
+        accent: donationAccent,
+      ),
+    ];
+    return SafeArea(
+      minimum: EdgeInsets.fromLTRB(
+        vertical ? 6 : 16,
+        0,
+        vertical ? 2 : 16,
+        vertical ? 0 : 12,
+      ),
+      child: Center(
+        heightFactor: vertical ? null : 1,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: vertical ? 58 : double.infinity,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(34),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: glassBlur, sigmaY: glassBlur),
+              child: Container(
+                width: vertical ? 58 : null,
+                height: vertical ? 216 : 58,
+                padding: const EdgeInsets.all(4),
+                decoration: glassSurface(
+                  34,
+                  shadows: const [
+                    BoxShadow(
+                      color: Color(0x55000000),
+                      blurRadius: 22,
+                      offset: Offset(0, 8),
                     ),
                   ],
                 ),
-              ),
-              bottomNavigationBar: _dock(),
-            ),
-            Positioned.fill(
-              child: IgnorePointer(
-                ignoring: !_showWelcome,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 320),
-                  child: _showWelcome
-                      ? const SyriWelcomeOverlay(key: ValueKey('welcome'))
-                      : const SizedBox.shrink(key: ValueKey('welcome-hidden')),
-                ),
+                child: vertical
+                    ? Column(children: items)
+                    : Row(children: items),
               ),
             ),
-          ],
-        );
-
-  Widget _dock() => SafeArea(
-    minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(34),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: glassBlur, sigmaY: glassBlur),
-        child: Container(
-          height: 58,
-          padding: const EdgeInsets.all(4),
-          decoration: glassSurface(
-            34,
-            shadows: const [
-              BoxShadow(
-                color: Color(0x55000000),
-                blurRadius: 22,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              _dockItem(0, Icons.map_outlined, Icons.map, _ui('Harta', 'Map')),
-              _dockItem(
-                1,
-                Icons.dynamic_feed_outlined,
-                Icons.dynamic_feed,
-                _ui('Ngjarje', 'Events'),
-              ),
-              _dockItem(
-                2,
-                Icons.settings_outlined,
-                Icons.settings,
-                _ui('Cilësime', 'Settings'),
-              ),
-              _dockItem(
-                3,
-                Icons.volunteer_activism_outlined,
-                Icons.volunteer_activism,
-                _ui('Mbështet', 'Support'),
-                accent: donationAccent,
-              ),
-            ],
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
   Widget _dockItem(
     int index,
@@ -4229,7 +4351,8 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     });
   }
 
-  Widget _mapPage() {
+  Widget _mapPage({required bool landscape}) {
+    final viewport = MediaQuery.sizeOf(context);
     final events = mapEvents;
     // At a continental scale even compact symbols obscure the map. Keep
     // recognizable icons at country and regional scales and reserve dots for
@@ -4483,7 +4606,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
           Positioned(
             left: 0,
             right: 0,
-            bottom: 92,
+            bottom: landscape ? 12 : 92,
             child: Center(
               child: IgnorePointer(
                 child: Semantics(
@@ -4517,18 +4640,30 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
             ),
           ),
         if (expandedCategory case final category?)
-          Positioned(top: 82, left: 12, child: _mapSubcategoryRail(category)),
+          Positioned(
+            top: landscape ? 72 : 82,
+            left: 12,
+            child: _mapSubcategoryRail(
+              category,
+              maxHeight: landscape
+                  ? (viewport.height - 190).clamp(80.0, 260.0)
+                  : null,
+            ),
+          ),
         Positioned(
           right: 11,
-          bottom: 92,
-          child: Column(
+          bottom: landscape ? 8 : 92,
+          child: Flex(
+            direction: Axis.vertical,
+            mainAxisSize: MainAxisSize.min,
             children: [
               _mapButton(
                 Icons.dashboard_customize_outlined,
                 'Zgjidh kategoritë',
                 _layerPicker,
+                compact: landscape,
               ),
-              const SizedBox(height: 7),
+              SizedBox(height: landscape ? 3 : 7),
               _mapButton(
                 Icons.add,
                 'Zmadho',
@@ -4536,8 +4671,9 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
                   mapController.camera.center,
                   (mapController.camera.zoom + 1).clamp(5, 18),
                 ),
+                compact: landscape,
               ),
-              const SizedBox(height: 7),
+              SizedBox(height: landscape ? 3 : 7),
               _mapButton(
                 Icons.remove,
                 'Zvogëlo',
@@ -4545,19 +4681,21 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
                   mapController.camera.center,
                   (mapController.camera.zoom - 1).clamp(5, 18),
                 ),
+                compact: landscape,
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: landscape ? 5 : 10),
               _mapButton(
                 locating ? Icons.hourglass_top : Icons.my_location,
                 'Vendndodhja ime',
                 locating ? null : _locate,
+                compact: landscape,
               ),
             ],
           ),
         ),
         Positioned(
           left: 8,
-          bottom: 88,
+          bottom: landscape ? 0 : 88,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             mainAxisSize: MainAxisSize.min,
@@ -4638,6 +4776,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
 
   Marker _airCityMarker(City place, FeedResult<AirQuality> reading) {
     final compact = !showAirPill(mapZoom);
+    final accessibilityScale = largerMapIcons ? 1.4 : 1.0;
     final color = _airAqiColor(reading.value.europeanAqi);
     final hasPollen =
         reading.value.olivePollen != null || reading.value.grassPollen != null;
@@ -4647,55 +4786,59 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       // The geographic point stays fixed. The air symbol sits just to the
       // right of it, leaving the centered agriculture symbol readable.
       alignment: Alignment.centerLeft,
-      width: compact ? 46 : 100,
-      height: 42,
-      child: Semantics(
-        button: true,
-        label:
-            'Ajri dhe poleni në ${place.name}, AQI ${reading.value.europeanAqi.round()}',
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => _airDetails(location: place, reading: reading),
-          child: Padding(
-            padding: const EdgeInsets.only(left: 28),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Container(
-                width: compact ? 12 : 70,
-                height: compact ? 12 : 30,
-                decoration: BoxDecoration(
-                  color: compact ? color : ink.withValues(alpha: .84),
-                  shape: compact ? BoxShape.circle : BoxShape.rectangle,
-                  borderRadius: compact ? null : BorderRadius.circular(15),
-                  border: Border.all(color: color, width: compact ? 1 : 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: color.withValues(alpha: .25),
-                      blurRadius: 8,
-                    ),
-                  ],
-                ),
-                child: compact
-                    ? null
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.air, color: color, size: 14),
-                          const SizedBox(width: 3),
-                          Text(
-                            '${reading.value.europeanAqi.round()}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          if (hasPollen) ...[
-                            const SizedBox(width: 2),
-                            const Icon(Icons.spa, color: mint, size: 12),
-                          ],
-                        ],
+      width: (compact ? 46 : 100) * accessibilityScale,
+      height: 42 * accessibilityScale,
+      child: Transform.scale(
+        scale: accessibilityScale,
+        alignment: Alignment.centerLeft,
+        child: Semantics(
+          button: true,
+          label:
+              'Ajri dhe poleni në ${place.name}, AQI ${reading.value.europeanAqi.round()}',
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _airDetails(location: place, reading: reading),
+            child: Padding(
+              padding: const EdgeInsets.only(left: 28),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  width: compact ? 12 : 70,
+                  height: compact ? 12 : 30,
+                  decoration: BoxDecoration(
+                    color: compact ? color : ink.withValues(alpha: .84),
+                    shape: compact ? BoxShape.circle : BoxShape.rectangle,
+                    borderRadius: compact ? null : BorderRadius.circular(15),
+                    border: Border.all(color: color, width: compact ? 1 : 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withValues(alpha: .25),
+                        blurRadius: 8,
                       ),
+                    ],
+                  ),
+                  child: compact
+                      ? null
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.air, color: color, size: 14),
+                            const SizedBox(width: 3),
+                            Text(
+                              '${reading.value.europeanAqi.round()}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            if (hasPollen) ...[
+                              const SizedBox(width: 2),
+                              const Icon(Icons.spa, color: mint, size: 12),
+                            ],
+                          ],
+                        ),
+                ),
               ),
             ),
           ),
@@ -4706,13 +4849,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
 
   Marker _overviewMarker(Event event) {
     final info = infoFor(event.kind);
-    final color = event.kind == 'water'
-        ? bathingWaterColor(event)
-        : event.kind == 'news' && event.tone == 'good'
-        ? Colors.greenAccent
-        : event.kind == 'news' && event.tone == 'bad'
-        ? Colors.orangeAccent
-        : info.color;
+    final color = eventAccent(event);
     final dotSize = (5 + (mapZoom - 5) * 2).clamp(5.0, 12.0);
     return Marker(
       point: event.displayPoint,
@@ -4747,36 +4884,35 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
   }) {
     final info = infoFor(group.first.kind);
     final event = group.first;
-    final markerColor = event.kind == 'water'
-        ? bathingWaterColor(event)
-        : event.kind == 'news' && event.tone == 'good'
-        ? Colors.greenAccent
-        : event.kind == 'news' && event.tone == 'bad'
-        ? Colors.orangeAccent
-        : info.color;
+    final markerColor = eventAccent(event);
     final markerIcon = event.kind == 'news'
-        ? (event.tone == 'good'
-              ? Icons.sentiment_satisfied_alt
-              : event.tone == 'bad'
-              ? Icons.warning_amber_rounded
+        ? (event.newsType == 'fire'
+              ? Icons.local_fire_department
+              : event.newsType == 'weather'
+              ? Icons.thunderstorm
               : Icons.article_outlined)
         : info.icon;
+    final accessibilityScale = largerMapIcons ? 1.4 : 1.0;
     return Marker(
       point: displayPoint ?? event.displayPoint,
-      width: event.kind == 'tv'
-          ? tvMarkerSpacing(mapZoom)
-          : event.kind == 'news'
-          ? (compact ? math.max(44, newsMarkerSpacing(mapZoom)) : 52)
-          : compact
-          ? coincidentMarkerSpacing(mapZoom)
-          : 48,
-      height: event.kind == 'tv'
-          ? tvMarkerSpacing(mapZoom)
-          : event.kind == 'news'
-          ? (compact ? math.max(44, newsMarkerSpacing(mapZoom)) : 52)
-          : compact
-          ? coincidentMarkerSpacing(mapZoom)
-          : 48,
+      width:
+          accessibilityScale *
+          (event.kind == 'tv'
+              ? tvMarkerSpacing(mapZoom)
+              : event.kind == 'news'
+              ? (compact ? math.max(44, newsMarkerSpacing(mapZoom)) : 52)
+              : compact
+              ? coincidentMarkerSpacing(mapZoom)
+              : 48),
+      height:
+          accessibilityScale *
+          (event.kind == 'tv'
+              ? tvMarkerSpacing(mapZoom)
+              : event.kind == 'news'
+              ? (compact ? math.max(44, newsMarkerSpacing(mapZoom)) : 52)
+              : compact
+              ? coincidentMarkerSpacing(mapZoom)
+              : 48),
       child: Semantics(
         label: event.kind == 'tv'
             ? event.title
@@ -4815,13 +4951,15 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
           behavior: HitTestBehavior.opaque,
           child: Center(
             child: Transform.scale(
-              scale: event.kind == 'tv'
-                  ? tvMarkerScale(mapZoom)
-                  : event.kind == 'news'
-                  ? newsMarkerScale(mapZoom, compact: compact)
-                  : compact
-                  ? coincidentMarkerScale(mapZoom)
-                  : markerScaleForKind(event.kind, mapZoom),
+              scale:
+                  accessibilityScale *
+                  (event.kind == 'tv'
+                      ? tvMarkerScale(mapZoom)
+                      : event.kind == 'news'
+                      ? newsMarkerScale(mapZoom, compact: compact)
+                      : compact
+                      ? coincidentMarkerScale(mapZoom)
+                      : markerScaleForKind(event.kind, mapZoom)),
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
@@ -5323,11 +5461,12 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     ),
   );
 
-  Widget _mapSubcategoryRail(String id) {
+  Widget _mapSubcategoryRail(String id, {double? maxHeight}) {
     final category = mapCategories.firstWhere((item) => item.id == id);
     final choices = _subcategoryChoices(id);
-    final maxHeight = MediaQuery.sizeOf(context).height * .52;
-    final height = (56.0 + choices.length * 46.0).clamp(56.0, maxHeight);
+    final availableHeight =
+        maxHeight ?? MediaQuery.sizeOf(context).height * .52;
+    final height = (56.0 + choices.length * 46.0).clamp(56.0, availableHeight);
     return SizedBox(
       width: 190,
       height: height,
@@ -6016,49 +6155,50 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     ),
   );
 
-  Widget _mapButton(IconData icon, String label, VoidCallback? action) =>
-      Tooltip(
-        message: label,
-        child: Semantics(
-          button: true,
-          enabled: action != null,
-          label: label,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: action,
-            child: SizedBox(
-              width: 48,
-              height: 48,
-              child: Center(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(
-                      sigmaX: glassBlur,
-                      sigmaY: glassBlur,
-                    ),
-                    child: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: glassSurface(
-                        14,
-                        shadows: const [
-                          BoxShadow(color: Color(0x33000000), blurRadius: 12),
-                        ],
-                      ),
-                      child: Icon(
-                        icon,
-                        color: action == null ? muted : mint,
-                        size: 22,
-                      ),
-                    ),
+  Widget _mapButton(
+    IconData icon,
+    String label,
+    VoidCallback? action, {
+    bool compact = false,
+  }) => Tooltip(
+    message: label,
+    child: Semantics(
+      button: true,
+      enabled: action != null,
+      label: label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: action,
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Center(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(compact ? 12 : 14),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: glassBlur, sigmaY: glassBlur),
+                child: Container(
+                  width: compact ? 38 : 42,
+                  height: compact ? 38 : 42,
+                  decoration: glassSurface(
+                    compact ? 12 : 14,
+                    shadows: const [
+                      BoxShadow(color: Color(0x33000000), blurRadius: 12),
+                    ],
+                  ),
+                  child: Icon(
+                    icon,
+                    color: action == null ? muted : mint,
+                    size: compact ? 20 : 22,
                   ),
                 ),
               ),
             ),
           ),
         ),
-      );
+      ),
+    ),
+  );
 
   TileLayer _publicWmsLayer(
     String baseUrl,
@@ -7400,6 +7540,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       return;
     }
     final info = infoFor(event.kind);
+    final accent = eventAccent(event);
     final related = relatedReports(event, _allNews);
     _sheet(
       Column(
@@ -7407,7 +7548,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
         children: [
           Row(
             children: [
-              _badge(info.name, info.color),
+              _badge(info.name, accent),
               const Spacer(),
               Flexible(
                 child: AppText(
@@ -7571,7 +7712,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
                     : matchCity('${event.title} ${event.description}')?.name ??
                           city.name,
                 url: event.url,
-                accent: info.color,
+                accent: accent,
               ),
               icon: const Icon(Icons.share_rounded),
               label: AppText(_tr('shareCard')),
@@ -7610,7 +7751,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
           ),
         ],
       ),
-      accent: info.color,
+      accent: accent,
     );
   }
 
@@ -7982,21 +8123,17 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
               ? Icons.gavel
               : event.newsType == 'crash'
               ? Icons.car_crash
+              : event.newsType == 'fire'
+              ? Icons.local_fire_department
+              : event.newsType == 'weather'
+              ? Icons.thunderstorm
               : event.tone == 'good'
               ? Icons.sentiment_satisfied_alt
               : event.tone == 'bad'
               ? Icons.warning_amber_rounded
               : info.icon)
         : info.icon;
-    final color = event.kind == 'news' && event.tone == 'good'
-        ? Colors.greenAccent
-        : event.kind == 'news' && event.newsType == 'violence'
-        ? Colors.redAccent
-        : event.kind == 'news' && event.newsType == 'death'
-        ? Colors.blueGrey
-        : event.kind == 'news' && event.tone == 'bad'
-        ? Colors.orangeAccent
-        : info.color;
+    final color = eventAccent(event);
     return Container(
       margin: const EdgeInsets.only(bottom: 11),
       decoration: BoxDecoration(
@@ -8550,266 +8687,293 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
         : 'Kontrolli i fundit: $date · $reports raportime të shqyrtuara. $lastAlertLabel.';
   }
 
-  void _notificationSettings() => _sheet(
+  void _notificationSettings({bool advanced = false}) => _sheet(
     StatefulBuilder(
       builder: (context, update) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _heading(
-            'Njoftimet',
-            'Zgjidh kategoritë dhe nënkategoritë për të cilat dëshiron alarm.',
+            advanced
+                ? _ui('Cilësimet e njoftimeve', 'Notification settings')
+                : _ui('Zgjidh njoftimet', 'Choose notifications'),
+            advanced
+                ? _ui(
+                    'Rëndësia, tingulli, orari dhe shpeshtësia.',
+                    'Importance, sound, schedule and frequency.',
+                  )
+                : _ui(
+                    'Aktivizo njoftimet dhe zgjidh çfarë dëshiron të marrësh.',
+                    'Turn on notifications and choose what you want to receive.',
+                  ),
           ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            secondary: const Icon(Icons.notifications_active, color: mint),
-            title: const AppText('Aktivizo njoftimet'),
-            subtitle: AppText(
-              notificationsEnabled
-                  ? 'Alarmet e zgjedhura janë aktive.'
-                  : 'Lejo SYRI të shfaqë njoftime.',
-              style: const TextStyle(color: muted, fontSize: 12),
-            ),
-            value: notificationsEnabled,
-            onChanged: (value) async {
-              var allowed = true;
-              if (value) allowed = await _requestNotificationPermission();
-              if (!mounted) return;
-              setState(() {
-                notificationsEnabled = value && allowed;
-                if (notificationsEnabled) notificationStart = DateTime.now();
-              });
-              if (notificationsEnabled) {
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setString(
-                  'setting_notifications_started_at',
-                  notificationStart.toIso8601String(),
-                );
-              }
-              unawaited(
-                _configureBackgroundNotifications(notificationsEnabled),
-              );
-              update(() {});
-              _saveSettings();
-              if (value && !allowed) {
-                _toast('Leja për njoftime nuk u dha.');
-              }
-            },
-          ),
-          const Divider(),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            secondary: const Icon(Icons.crisis_alert, color: Colors.redAccent),
-            title: const AppText('Vetëm njoftime të rëndësishme'),
-            subtitle: const AppText(
-              'Filtron lajmet e zakonshme dhe mban alarmet me ndikim.',
-              style: TextStyle(color: muted, fontSize: 12),
-            ),
-            value: urgentNotificationsOnly,
-            onChanged: (value) {
-              setState(() => urgentNotificationsOnly = value);
-              update(() {});
-              _saveSettings();
-            },
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            secondary: const Icon(Icons.volume_up_outlined, color: mint),
-            title: const AppText('Tingulli'),
-            value: notificationSound,
-            onChanged: (value) {
-              setState(() => notificationSound = value);
-              update(() {});
-              _saveSettings();
-            },
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            secondary: const Icon(
-              Icons.bedtime_outlined,
-              color: Colors.indigoAccent,
-            ),
-            title: const AppText('Orari i qetësisë'),
-            subtitle: const AppText(
-              'Mos shfaq njoftime nga 23:00 deri në 07:00.',
-              style: TextStyle(color: muted, fontSize: 12),
-            ),
-            value: quietNotificationsAtNight,
-            onChanged: (value) {
-              setState(() => quietNotificationsAtNight = value);
-              update(() {});
-              _saveSettings();
-            },
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.schedule_outlined, color: mint),
-            title: const AppText('Kontrolli në sfond'),
-            subtitle: FutureBuilder<String>(
-              future: _backgroundNotificationStatus(),
-              builder: (_, snapshot) => AppText(
-                snapshot.data ?? 'Po kontrollohet gjendja…',
+          if (!advanced) ...[
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.notifications_active, color: mint),
+              title: const AppText('Aktivizo njoftimet'),
+              subtitle: AppText(
+                notificationsEnabled
+                    ? 'Alarmet e zgjedhura janë aktive.'
+                    : 'Lejo SYRI të shfaqë njoftime.',
                 style: const TextStyle(color: muted, fontSize: 12),
               ),
-            ),
-          ),
-          if (Platform.isAndroid)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.battery_alert_outlined, color: mint),
-              title: const AppText('Lejo njoftimet në sfond'),
-              subtitle: const AppText(
-                'Hap cilësimet e SYRI në telefon, zgjidh Bateria dhe vendos Pa kufizime. Në Samsung shtoje edhe te Aplikacionet që nuk flenë. Kursimi i baterisë mund t’i vonojë njoftimet.',
-                style: TextStyle(color: muted, fontSize: 12),
-              ),
-              trailing: const Icon(Icons.open_in_new, color: mint, size: 18),
-              onTap: () async {
-                try {
-                  await _syriPowerChannel.invokeMethod<void>(
-                    'openAppBatterySettings',
+              value: notificationsEnabled,
+              onChanged: (value) async {
+                var allowed = true;
+                if (value) allowed = await _requestNotificationPermission();
+                if (!mounted) return;
+                setState(() {
+                  notificationsEnabled = value && allowed;
+                  if (notificationsEnabled) notificationStart = DateTime.now();
+                });
+                if (notificationsEnabled) {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setString(
+                    'setting_notifications_started_at',
+                    notificationStart.toIso8601String(),
                   );
-                } catch (_) {
-                  if (mounted) _toast('Cilësimet e telefonit nuk u hapën.');
+                }
+                unawaited(
+                  _configureBackgroundNotifications(notificationsEnabled),
+                );
+                update(() {});
+                _saveSettings();
+                if (value && !allowed) {
+                  _toast('Leja për njoftime nuk u dha.');
                 }
               },
             ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.history_toggle_off, color: mint),
-            title: const AppText('Mosha maksimale e njoftimit'),
-            subtitle: const AppText(
-              'Raportimet më të vjetra nuk dërgohen si njoftime.',
-              style: TextStyle(color: muted, fontSize: 12),
-            ),
-            trailing: DropdownButton<int>(
-              value: notificationMaxAgeMinutes,
-              underline: const SizedBox.shrink(),
-              items: const [30, 60, 120]
-                  .map(
-                    (minutes) => DropdownMenuItem(
-                      value: minutes,
-                      child: AppText('$minutes min'),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (minutes) {
-                if (minutes == null) return;
-                setState(() => notificationMaxAgeMinutes = minutes);
-                update(() {});
-                _saveSettings();
-              },
-            ),
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            secondary: const Icon(Icons.public, color: Colors.lightBlueAccent),
-            title: const AppText('Njoftime nga bota'),
-            subtitle: const AppText(
-              'Kur është fikur, përdoren vetëm vendet aktive te cilësimet.',
-              style: TextStyle(color: muted, fontSize: 12),
-            ),
-            value: worldNotifications,
-            onChanged: (value) {
-              setState(() => worldNotifications = value);
-              update(() {});
-              _saveSettings();
-            },
-          ),
-          const SizedBox(height: 8),
-          AppText(
-            'Magnituda minimale e tërmetit: ${minimumEarthquakeMagnitude.toStringAsFixed(1)}',
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-          Slider(
-            value: minimumEarthquakeMagnitude,
-            min: 0,
-            max: 7,
-            divisions: 14,
-            label: minimumEarthquakeMagnitude.toStringAsFixed(1),
-            onChanged: (value) {
-              setState(() => minimumEarthquakeMagnitude = value);
-              update(() {});
-            },
-            onChangeEnd: (_) => _saveSettings(),
-          ),
-          const SizedBox(height: 12),
-          for (final category in mapCategories.where(
-            (item) => const {'news', 'alerts', 'weather'}.contains(item.id),
-          )) ...[
+          ],
+          if (advanced) ...[
+            const Divider(),
             SwitchListTile(
-              key: ValueKey('notification-category-${category.id}'),
-              dense: true,
               contentPadding: EdgeInsets.zero,
-              secondary: Icon(category.icon, color: category.color),
-              title: AppText(
-                category.name,
-                style: const TextStyle(fontWeight: FontWeight.w700),
+              secondary: const Icon(
+                Icons.crisis_alert,
+                color: Colors.redAccent,
               ),
-              value: category.id == 'weather'
-                  ? notificationLayers.contains('weather')
-                  : _notificationSubcategories(
-                      category.id,
-                    ).every((choice) => notificationLayers.contains(choice.$1)),
+              title: const AppText('Vetëm njoftime të rëndësishme'),
+              subtitle: const AppText(
+                'Filtron lajmet e zakonshme dhe mban alarmet me ndikim.',
+                style: TextStyle(color: muted, fontSize: 12),
+              ),
+              value: urgentNotificationsOnly,
               onChanged: (value) {
-                setState(() {
-                  final keys = category.id == 'weather'
-                      ? ['weather']
-                      : _notificationSubcategories(category.id)
-                            .map((choice) => choice.$1);
-                  for (final key in keys) {
-                    value
-                        ? notificationLayers.add(key)
-                        : notificationLayers.remove(key);
-                  }
-                  notificationLayers.remove(
-                    category.id == 'weather' ? '' : category.id,
-                  );
-                });
+                setState(() => urgentNotificationsOnly = value);
                 update(() {});
                 _saveSettings();
               },
             ),
-            for (final choice
-                in category.id == 'weather'
-                    ? const <(String, String, IconData, Color)>[]
-                    : _notificationSubcategories(category.id))
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.volume_up_outlined, color: mint),
+              title: const AppText('Tingulli'),
+              value: notificationSound,
+              onChanged: (value) {
+                setState(() => notificationSound = value);
+                update(() {});
+                _saveSettings();
+              },
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(
+                Icons.bedtime_outlined,
+                color: Colors.indigoAccent,
+              ),
+              title: const AppText('Orari i qetësisë'),
+              subtitle: const AppText(
+                'Mos shfaq njoftime nga 23:00 deri në 07:00.',
+                style: TextStyle(color: muted, fontSize: 12),
+              ),
+              value: quietNotificationsAtNight,
+              onChanged: (value) {
+                setState(() => quietNotificationsAtNight = value);
+                update(() {});
+                _saveSettings();
+              },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.schedule_outlined, color: mint),
+              title: const AppText('Kontrolli në sfond'),
+              subtitle: FutureBuilder<String>(
+                future: _backgroundNotificationStatus(),
+                builder: (_, snapshot) => AppText(
+                  snapshot.data ?? 'Po kontrollohet gjendja…',
+                  style: const TextStyle(color: muted, fontSize: 12),
+                ),
+              ),
+            ),
+            if (Platform.isAndroid)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.battery_alert_outlined, color: mint),
+                title: const AppText('Lejo njoftimet në sfond'),
+                subtitle: const AppText(
+                  'Hap cilësimet e SYRI në telefon, zgjidh Bateria dhe vendos Pa kufizime. Në Samsung shtoje edhe te Aplikacionet që nuk flenë. Kursimi i baterisë mund t’i vonojë njoftimet.',
+                  style: TextStyle(color: muted, fontSize: 12),
+                ),
+                trailing: const Icon(Icons.open_in_new, color: mint, size: 18),
+                onTap: () async {
+                  try {
+                    await _syriPowerChannel.invokeMethod<void>(
+                      'openAppBatterySettings',
+                    );
+                  } catch (_) {
+                    if (mounted) _toast('Cilësimet e telefonit nuk u hapën.');
+                  }
+                },
+              ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.history_toggle_off, color: mint),
+              title: const AppText('Mosha maksimale e njoftimit'),
+              subtitle: const AppText(
+                'Raportimet më të vjetra nuk dërgohen si njoftime.',
+                style: TextStyle(color: muted, fontSize: 12),
+              ),
+              trailing: DropdownButton<int>(
+                value: notificationMaxAgeMinutes,
+                underline: const SizedBox.shrink(),
+                items: const [30, 60, 120]
+                    .map(
+                      (minutes) => DropdownMenuItem(
+                        value: minutes,
+                        child: AppText('$minutes min'),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (minutes) {
+                  if (minutes == null) return;
+                  setState(() => notificationMaxAgeMinutes = minutes);
+                  update(() {});
+                  _saveSettings();
+                },
+              ),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(
+                Icons.public,
+                color: Colors.lightBlueAccent,
+              ),
+              title: const AppText('Njoftime nga bota'),
+              subtitle: const AppText(
+                'Kur është fikur, përdoren vetëm vendet aktive te cilësimet.',
+                style: TextStyle(color: muted, fontSize: 12),
+              ),
+              value: worldNotifications,
+              onChanged: (value) {
+                setState(() => worldNotifications = value);
+                update(() {});
+                _saveSettings();
+              },
+            ),
+            const SizedBox(height: 8),
+            AppText(
+              'Magnituda minimale e tërmetit: ${minimumEarthquakeMagnitude.toStringAsFixed(1)}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            Slider(
+              value: minimumEarthquakeMagnitude,
+              min: 0,
+              max: 7,
+              divisions: 14,
+              label: minimumEarthquakeMagnitude.toStringAsFixed(1),
+              onChanged: (value) {
+                setState(() => minimumEarthquakeMagnitude = value);
+                update(() {});
+              },
+              onChangeEnd: (_) => _saveSettings(),
+            ),
+          ],
+          if (!advanced) ...[
+            const SizedBox(height: 12),
+            for (final category in mapCategories.where(
+              (item) => const {'news', 'alerts', 'weather'}.contains(item.id),
+            )) ...[
               SwitchListTile(
-                key: ValueKey('notification-subcategory-${choice.$1}'),
+                key: ValueKey('notification-category-${category.id}'),
                 dense: true,
-                visualDensity: const VisualDensity(vertical: -3),
-                contentPadding: const EdgeInsets.only(left: 28),
-                secondary: Icon(choice.$3, color: choice.$4, size: 18),
-                title: AppText(choice.$2, style: const TextStyle(fontSize: 13)),
-                value: notificationLayers.contains(choice.$1),
+                contentPadding: EdgeInsets.zero,
+                secondary: Icon(category.icon, color: category.color),
+                title: AppText(
+                  category.name,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                value: category.id == 'weather'
+                    ? notificationLayers.contains('weather')
+                    : _notificationSubcategories(category.id).every(
+                        (choice) => notificationLayers.contains(choice.$1),
+                      ),
                 onChanged: (value) {
                   setState(() {
-                    value
-                        ? notificationLayers.add(choice.$1)
-                        : notificationLayers.remove(choice.$1);
+                    final keys = category.id == 'weather'
+                        ? ['weather']
+                        : _notificationSubcategories(category.id)
+                              .map((choice) => choice.$1);
+                    for (final key in keys) {
+                      value
+                          ? notificationLayers.add(key)
+                          : notificationLayers.remove(key);
+                    }
+                    notificationLayers.remove(
+                      category.id == 'weather' ? '' : category.id,
+                    );
                   });
                   update(() {});
                   _saveSettings();
                 },
               ),
-            const Divider(height: 18),
+              for (final choice
+                  in category.id == 'weather'
+                      ? const <(String, String, IconData, Color)>[]
+                      : _notificationSubcategories(category.id))
+                SwitchListTile(
+                  key: ValueKey('notification-subcategory-${choice.$1}'),
+                  dense: true,
+                  visualDensity: const VisualDensity(vertical: -3),
+                  contentPadding: const EdgeInsets.only(left: 28),
+                  secondary: Icon(choice.$3, color: choice.$4, size: 18),
+                  title: AppText(
+                    choice.$2,
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  value: notificationLayers.contains(choice.$1),
+                  onChanged: (value) {
+                    setState(() {
+                      value
+                          ? notificationLayers.add(choice.$1)
+                          : notificationLayers.remove(choice.$1);
+                    });
+                    update(() {});
+                    _saveSettings();
+                  },
+                ),
+              const Divider(height: 18),
+            ],
           ],
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: notificationsEnabled
-                  ? () => _showNotification(
-                      'SYRI · Njoftim prove',
-                      'Njoftimet po funksionojnë në këtë pajisje.',
-                    )
-                  : null,
-              icon: const Icon(Icons.notification_add_outlined),
-              label: const AppText('Dërgo njoftim prove'),
+          if (advanced) ...[
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: notificationsEnabled
+                    ? () => _showNotification(
+                        'SYRI · Njoftim prove',
+                        'Njoftimet po funksionojnë në këtë pajisje.',
+                      )
+                    : null,
+                icon: const Icon(Icons.notification_add_outlined),
+                label: const AppText('Dërgo njoftim prove'),
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
-          const AppText(
-            'Kur aplikacioni është i mbyllur, Android kontrollon periodikisht burimet. Njoftimi në çastin e botimit kërkon shërbim push.',
-            style: TextStyle(color: muted, fontSize: 11, height: 1.45),
-          ),
+            const SizedBox(height: 10),
+            const AppText(
+              'Kur aplikacioni është i mbyllur, Android kontrollon periodikisht burimet. Njoftimi në çastin e botimit kërkon shërbim push.',
+              style: TextStyle(color: muted, fontSize: 11, height: 1.45),
+            ),
+          ],
         ],
       ),
     ),
@@ -9037,8 +9201,8 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
             const SizedBox(height: 15),
             Text(
               _ui(
-                'SYRI-n e ndërtoj dhe e mbaj vetë. Burimet e informacionit, mirëmbajtja dhe çdo përditësim kërkojnë shumë kohë dhe para nga xhepi im.',
-                'I build and maintain SYRI on my own. Information sources, maintenance and every update take a lot of time and money from my own pocket.',
+                'SYRI është një projekt personal që e menaxhoj vetëm unë. Burimet e informacionit, mirëmbajtja dhe çdo përditësim kërkojnë shumë kohë dhe para nga xhepi im.',
+                'SYRI is a personal project that I manage on my own. Information sources, maintenance and every update take a lot of time and money from my own pocket.',
               ),
               style: const TextStyle(
                 color: Color(0xffd9e2df),
@@ -9098,13 +9262,38 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       ),
       const SizedBox(height: 18),
       Center(
-        child: TextButton.icon(
-          onPressed: () => _open(creatorLinkedInUrl),
-          icon: const Icon(Icons.open_in_new_rounded, size: 17),
-          label: Text(
-            _ui('Njihu me Pieron në LinkedIn', 'Meet Piero on LinkedIn'),
-          ),
-          style: TextButton.styleFrom(foregroundColor: const Color(0xff8ed7ff)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            OutlinedButton.icon(
+              onPressed: () => _open(creatorLinkedInUrl),
+              icon: const Text(
+                'in',
+                style: TextStyle(
+                  color: Color(0xff8ed7ff),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              label: const Text('LinkedIn'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xff8ed7ff),
+                side: BorderSide(
+                  color: const Color(0xff8ed7ff).withValues(alpha: .5),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            OutlinedButton.icon(
+              onPressed: () => _open('mailto:pierob004@gmail.com'),
+              icon: const Icon(Icons.mail_outline_rounded, color: mint),
+              label: Text(_ui('Më shkruaj', 'Email Me')),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: mint,
+                side: BorderSide(color: mint.withValues(alpha: .5)),
+              ),
+            ),
+          ],
         ),
       ),
       const SizedBox(height: 10),
@@ -9118,6 +9307,31 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       ),
     ],
   );
+
+  void _toggleCountry(String country) {
+    cityGeneration++;
+    setState(() {
+      enabledNewsCountries.contains(country)
+          ? enabledNewsCountries.remove(country)
+          : enabledNewsCountries.add(country);
+      results.remove('protected');
+      results.remove('biodiversity');
+      results.remove('water');
+      results.remove('airports');
+    });
+    for (final layer in const [
+      'population',
+      'protected',
+      'biodiversity',
+      'water',
+      'airports',
+      'official-maps',
+    ]) {
+      if (enabled.contains(layer)) unawaited(_loadLayer(layer));
+    }
+    if (enabled.contains('air')) unawaited(_loadAirQuality());
+    unawaited(_saveSettings());
+  }
 
   Widget _settingsPage() => ListView(
     padding: const EdgeInsets.fromLTRB(20, 12, 20, 110),
@@ -9150,6 +9364,32 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
           onTap: () => _openInfoPage(SyriInfoKind.guide),
         ),
       ),
+      Card(
+        color: largerMapIcons ? mint.withValues(alpha: .10) : panel,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: largerMapIcons ? mint.withValues(alpha: .5) : Colors.white10,
+          ),
+        ),
+        child: SwitchListTile(
+          key: const ValueKey('setting-large-map-icons'),
+          secondary: const Icon(Icons.accessibility_new_rounded, color: mint),
+          title: Text(_ui('Ikona më të mëdha', 'Larger map icons')),
+          subtitle: Text(
+            _ui(
+              'Rrit ikonat në hartë me 40% për t’i parë dhe prekur më lehtë.',
+              'Increase map icons by 40% so they are easier to see and tap.',
+            ),
+            style: const TextStyle(color: muted, fontSize: 12),
+          ),
+          value: largerMapIcons,
+          onChanged: (value) {
+            setState(() => largerMapIcons = value);
+            unawaited(_saveSettings());
+          },
+        ),
+      ),
       _settingsSectionTitle(
         Icons.tune_rounded,
         _ui('PËR TY', 'FOR YOU'),
@@ -9159,6 +9399,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
         ),
       ),
       Card(
+        key: const ValueKey('notification-choices-settings'),
         color: notificationsEnabled ? mint.withValues(alpha: .1) : panel,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
@@ -9175,18 +9416,48 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
                 : Icons.notifications_none,
             color: mint,
           ),
-          title: const AppText(
-            'Njoftimet e personalizuara',
+          title: AppText(
+            _ui('Zgjidh njoftimet', 'Choose notifications'),
             style: TextStyle(fontWeight: FontWeight.w700),
           ),
           subtitle: AppText(
             notificationsEnabled
-                ? '${notificationLayers.length} zgjedhje aktive'
-                : 'Alarme, lajme dhe mot sipas zgjedhjes',
+                ? _ui(
+                    '${notificationLayers.length} zgjedhje aktive',
+                    '${notificationLayers.length} active choices',
+                  )
+                : _ui(
+                    'Aktivizo dhe zgjidh kategoritë',
+                    'Turn on and choose categories',
+                  ),
             style: const TextStyle(color: muted, fontSize: 12),
           ),
           trailing: const Icon(Icons.chevron_right),
-          onTap: _notificationSettings,
+          onTap: () => _notificationSettings(),
+        ),
+      ),
+      Card(
+        key: const ValueKey('notification-behavior-settings'),
+        color: panel,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Colors.white10),
+        ),
+        child: ListTile(
+          leading: const Icon(Icons.tune_rounded, color: mint),
+          title: Text(
+            _ui('Cilësimet e njoftimeve', 'Notification settings'),
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: Text(
+            _ui(
+              'Rëndësia, tingulli, orari dhe magnituda',
+              'Importance, sound, schedule and magnitude',
+            ),
+            style: const TextStyle(color: muted, fontSize: 12),
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _notificationSettings(advanced: true),
         ),
       ),
       Card(
@@ -9283,52 +9554,36 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
           'Choose the countries that matter to you.',
         ),
       ),
-      Material(
-        color: panel,
-        borderRadius: BorderRadius.circular(20),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            for (var i = 0; i < supportedNewsCountries.length; i++) ...[
-              if (i > 0) const Divider(height: 1),
-              SwitchListTile(
-                key: ValueKey('country-news-${supportedNewsCountries[i]}'),
-                title: AppText(supportedNewsCountries[i]),
-                subtitle: AppText(
-                  'Lajme dhe shtresa të disponueshme për ${supportedNewsCountries[i]}',
-                  style: const TextStyle(color: muted, fontSize: 12),
-                ),
-                value: enabledNewsCountries.contains(supportedNewsCountries[i]),
-                onChanged: (value) {
-                  cityGeneration++;
-                  setState(() {
-                    value
-                        ? enabledNewsCountries.add(supportedNewsCountries[i])
-                        : enabledNewsCountries.remove(
-                            supportedNewsCountries[i],
-                          );
-                    results.remove('protected');
-                    results.remove('biodiversity');
-                    results.remove('water');
-                    results.remove('airports');
-                  });
-                  if (enabled.contains('population')) _loadLayer('population');
-                  if (enabled.contains('protected')) _loadLayer('protected');
-                  if (enabled.contains('biodiversity')) {
-                    _loadLayer('biodiversity');
-                  }
-                  if (enabled.contains('water')) _loadLayer('water');
-                  if (enabled.contains('airports')) _loadLayer('airports');
-                  if (enabled.contains('air')) _loadAirQuality();
-                  if (enabled.contains('official-maps')) {
-                    _loadLayer('official-maps');
-                  }
-                  unawaited(_saveSettings());
-                },
-              ),
-            ],
+      Column(
+        children: [
+          for (var row = 0; row < 2; row++) ...[
+            if (row > 0) const SizedBox(height: 10),
+            Row(
+              children: [
+                for (var column = 0; column < 2; column++) ...[
+                  if (column > 0) const SizedBox(width: 10),
+                  Expanded(
+                    child: SizedBox(
+                      height: 110,
+                      child: CountrySelectionCard(
+                        key: ValueKey(
+                          'country-news-${cityPickerCountryOrder[row * 2 + column]}',
+                        ),
+                        country: cityPickerCountryOrder[row * 2 + column],
+                        selected: enabledNewsCountries.contains(
+                          cityPickerCountryOrder[row * 2 + column],
+                        ),
+                        onTap: () => _toggleCountry(
+                          cityPickerCountryOrder[row * 2 + column],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ],
-        ),
+        ],
       ),
       const Padding(
         padding: EdgeInsets.only(top: 8),

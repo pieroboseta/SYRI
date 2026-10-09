@@ -128,6 +128,26 @@ void main() {
     },
   );
 
+  test('one failed air batch does not hide other cities', () async {
+    SharedPreferences.setMockInitialValues({});
+    final selected = cities.take(13).toList();
+    final api = SyriApi(
+      client: MockClient((request) async {
+        final latitudes = request.url.queryParameters['latitude']!.split(',');
+        if (latitudes.length == 12) return http.Response('unavailable', 503);
+        return http.Response(
+          jsonEncode({
+            'current': {'time': '2026-09-29T12:00', 'european_aqi': 31},
+          }),
+          200,
+        );
+      }),
+    );
+    final readings = await api.airQualityForCities(selected);
+    expect(readings.length, 1);
+    expect(readings[selected.last.name]?.value.europeanAqi, 31);
+  });
+
   test('inland bathing water keeps measured and unmeasured lakes distinct', () {
     final events = SyriApi().inlandBathingWater({
       'Kosovë',

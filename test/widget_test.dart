@@ -17,6 +17,19 @@ import 'package:syri/info_pages.dart';
 import 'package:syri/notification_payload.dart';
 
 void main() {
+  test('news detail accents follow their map subcategory', () {
+    const violence = Event(
+      id: 'violence-test',
+      title: 'Të shtëna me armë në qytet',
+      description: '',
+      source: 'Test',
+      url: 'https://example.com',
+      kind: 'news',
+    );
+    expect(violence.newsType, 'violence');
+    expect(eventAccent(violence), Colors.redAccent);
+  });
+
   test(
     'protected-area service filters every rendered layer to active countries',
     () {
@@ -298,6 +311,8 @@ void main() {
   testWidgets('support tab shows the donation page in both languages', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(600, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     SharedPreferences.setMockInitialValues({});
     addTearDown(() => setSyriEnglish(false));
     await tester.pumpWidget(const SyriApp(loadData: false));
@@ -313,7 +328,13 @@ void main() {
     );
     expect(find.text('Më bli një kafe'), findsOneWidget);
     expect(find.text('Ose dhuro me PayPal'), findsOneWidget);
-    expect(find.text('Njihu me Pieron në LinkedIn'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('LinkedIn'),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('LinkedIn'), findsOneWidget);
+    expect(find.text('Më shkruaj'), findsOneWidget);
     setSyriEnglish(true);
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();
@@ -327,11 +348,12 @@ void main() {
     expect(find.text('Buy me a coffee'), findsOneWidget);
     expect(find.text('Or donate with PayPal'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('Meet Piero on LinkedIn'),
+      find.text('LinkedIn'),
       150,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('Meet Piero on LinkedIn'), findsOneWidget);
+    expect(find.text('LinkedIn'), findsOneWidget);
+    expect(find.text('Email Me'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Hi, I’m Piero.'),
       -250,
@@ -539,6 +561,8 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -160));
+    await tester.pumpAndSettle();
     expect(find.text('Rreth meje'), findsNothing);
     expect(find.byKey(const ValueKey('settings-sources')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('settings-sources')));
@@ -696,7 +720,8 @@ void main() {
     await tester.pumpWidget(const SyriApp(loadData: false));
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();
-    expect(find.text('Njoftimet e personalizuara'), findsOneWidget);
+    expect(find.text('Zgjidh njoftimet'), findsOneWidget);
+    expect(find.text('Cilësimet e njoftimeve'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Mosha maksimale e lajmeve'),
       300,
@@ -711,19 +736,29 @@ void main() {
     expect(find.text('Rrezja “Pranë qytetit”'), findsOneWidget);
 
     await tester.scrollUntilVisible(
-      find.text('Njoftimet e personalizuara'),
+      find.text('Zgjidh njoftimet'),
       -300,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.drag(find.byType(Scrollable).first, const Offset(0, 180));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Njoftimet e personalizuara'));
+    await tester.tap(
+      find.byKey(const ValueKey('notification-choices-settings')),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Aktivizo njoftimet'), findsOneWidget);
-    expect(find.text('Vetëm njoftime të rëndësishme'), findsOneWidget);
-    expect(find.text('Orari i qetësisë'), findsOneWidget);
     expect(find.text('Të mira'), findsOneWidget);
     expect(find.text('Zjarre aktive'), findsWidgets);
+    expect(find.text('Vetëm njoftime të rëndësishme'), findsNothing);
+    tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('notification-behavior-settings')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Vetëm njoftime të rëndësishme'), findsOneWidget);
+    expect(find.text('Orari i qetësisë'), findsOneWidget);
+    expect(find.text('Të mira'), findsNothing);
   });
 
   testWidgets('shows cached data size and asks before clearing it', (
@@ -771,7 +806,9 @@ void main() {
     await tester.pumpWidget(const SyriApp(loadData: false));
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Njoftimet e personalizuara'));
+    await tester.tap(
+      find.byKey(const ValueKey('notification-choices-settings')),
+    );
     await tester.pumpAndSettle();
     final news = find.byKey(const ValueKey('notification-category-news'));
     final good = find.byKey(
@@ -814,14 +851,17 @@ void main() {
     );
     await Scrollable.ensureVisible(tester.element(albania), alignment: .4);
     await tester.pumpAndSettle();
-    expect(tester.widget<SwitchListTile>(albania).value, isTrue);
-    expect(tester.widget<SwitchListTile>(kosovo).value, isTrue);
-    expect(tester.widget<SwitchListTile>(northMacedonia).value, isTrue);
-    expect(tester.widget<SwitchListTile>(montenegro).value, isTrue);
+    expect(tester.widget<CountrySelectionCard>(albania).selected, isTrue);
+    expect(tester.widget<CountrySelectionCard>(kosovo).selected, isTrue);
+    expect(
+      tester.widget<CountrySelectionCard>(northMacedonia).selected,
+      isTrue,
+    );
+    expect(tester.widget<CountrySelectionCard>(montenegro).selected, isTrue);
     await tester.tap(albania);
     await tester.pumpAndSettle();
-    expect(tester.widget<SwitchListTile>(albania).value, isFalse);
-    expect(tester.widget<SwitchListTile>(kosovo).value, isTrue);
+    expect(tester.widget<CountrySelectionCard>(albania).selected, isFalse);
+    expect(tester.widget<CountrySelectionCard>(kosovo).selected, isTrue);
   });
 
   testWidgets('opens SYRI Tani from the header, not Events', (tester) async {
@@ -902,5 +942,23 @@ void main() {
     await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
     await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
     semantics.dispose();
+  });
+
+  testWidgets('landscape keeps navigation left and map controls right', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 360));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const SyriApp(loadData: false));
+    await tester.pumpAndSettle();
+    final dock = tester.getCenter(find.byKey(const ValueKey('dock-0')));
+    final controls = tester.getCenter(find.byTooltip('Zmadho'));
+    expect(dock.dx, lessThan(controls.dx));
+    expect(
+      dock.dy,
+      lessThan(tester.getCenter(find.byKey(const ValueKey('dock-3'))).dy),
+    );
+    expect(tester.takeException(), isNull);
   });
 }

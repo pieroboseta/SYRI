@@ -1044,9 +1044,10 @@ class SyriApi {
   Future<Map<String, FeedResult<AirQuality>>> airQualityForCities(
     List<City> selectedCities,
   ) async {
-    final readings = <String, FeedResult<AirQuality>>{};
-    for (var start = 0; start < selectedCities.length; start += 20) {
-      final group = selectedCities.skip(start).take(20).toList();
+    Future<Map<String, FeedResult<AirQuality>>> loadGroup(
+      List<City> group,
+    ) async {
+      final readings = <String, FeedResult<AirQuality>>{};
       final latitudes = group.map((city) => city.lat).join(',');
       final longitudes = group.map((city) => city.lon).join(',');
       try {
@@ -1073,6 +1074,18 @@ class SyriApi {
       } catch (_) {
         // Keep other batches visible if one request fails.
       }
+      return readings;
+    }
+
+    // Independent batches should not wait for a slow or failed sibling.
+    final groups = <List<City>>[
+      for (var start = 0; start < selectedCities.length; start += 12)
+        selectedCities.skip(start).take(12).toList(),
+    ];
+    final batches = await Future.wait(groups.map(loadGroup));
+    final readings = <String, FeedResult<AirQuality>>{};
+    for (final batch in batches) {
+      readings.addAll(batch);
     }
     return readings;
   }

@@ -329,16 +329,16 @@ class SyriInfoPage extends StatelessWidget {
     ],
     7 => [
       t(
-        'Hap Cilësime → Njoftimet e personalizuara.',
-        'Open Settings → Personalized notifications.',
+        'Hap Cilësime → Zgjidh njoftimet për t’i aktivizuar.',
+        'Open Settings → Choose notifications to turn them on.',
       ),
       t(
         'Aktivizo kategoritë, pastaj hiq nënkategoritë që nuk do.',
         'Enable categories, then turn off unwanted subcategories.',
       ),
       t(
-        'Vendos vendet, orarin e qetë dhe pragun minimal të tërmeteve.',
-        'Set countries, quiet hours and the minimum earthquake level.',
+        'Vendet zgjidhen me katër kartat; tingulli, orari i qetë dhe magnituda janë te Cilësimet e njoftimeve.',
+        'Choose countries with the four cards; sound, quiet hours and magnitude are under Notification settings.',
       ),
     ],
     8 => [
@@ -451,8 +451,8 @@ class SyriInfoPage extends StatelessWidget {
       '8. Personalize notifications',
       'Vetëm temat që kanë vlerë për ty',
       'Only the topics that matter to you',
-      'Te Cilësime → Njoftimet e personalizuara, aktivizo kategoritë dhe më pas hiq nënkategoritë që nuk do. Mund të zgjedhësh vende, lajme nga bota, orar të qetë dhe pragun e tërmeteve. Android i kontrollon burimet periodikisht kur aplikacioni është i mbyllur; njoftimet nuk garantohen në çastin e publikimit.',
-      'In Settings → Personalized notifications, enable categories and then remove subcategories you do not want. You can choose countries, world news, quiet hours and an earthquake threshold. Android checks sources periodically while the app is closed; delivery at the exact publishing moment is not guaranteed.',
+      'Te Cilësime → Zgjidh njoftimet, ndiz njoftimet dhe zgjidh kategoritë e nënkategoritë. Te Cilësimet e njoftimeve vendos rëndësinë, tingullin, orarin e qetë dhe pragun e tërmeteve. Katër kartat e vendeve filtrojnë përmbajtjen rajonale. Android i kontrollon burimet periodikisht kur aplikacioni është i mbyllur; njoftimet nuk garantohen në çastin e publikimit.',
+      'In Settings → Choose notifications, turn them on and choose categories and subcategories. Notification settings controls importance, sound, quiet hours and the earthquake threshold. The four country cards filter regional content. Android checks sources periodically while the app is closed; delivery at the exact publishing moment is not guaranteed.',
     ),
     _InfoSection(
       Icons.language_outlined,
