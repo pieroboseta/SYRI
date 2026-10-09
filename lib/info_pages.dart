@@ -266,6 +266,10 @@ class SyriInfoPage extends StatelessWidget {
         'Prek vetëm shigjetën për të parë listën, pa ndezur asgjë. Pastaj zgjidh nënkategoritë një nga një në anën e majtë.',
         'Tap only the arrow to see the list without turning anything on. Then select subcategories one by one on the left.',
       ),
+      t(
+        'Te Moti, aktivizo “Re, mjegull, erë” dhe hap Legjendën për të zgjedhur orën. Te Ujërat, “Prurjet e lumenjve” janë parashikime modeli; te Alarmet, aktiviteti diellor është informacion global.',
+        'Under Weather, enable “Clouds, fog, wind” and open Legend to choose an hour. River flow under Waters is a model forecast; solar activity under Alerts is global information.',
+      ),
     ],
     3 => [
       t(

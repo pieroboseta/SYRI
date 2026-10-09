@@ -371,6 +371,10 @@ class Event {
   /// A user-facing statement of what the timestamp and marker represent.
   String get dataMode {
     if (kind == 'planes') return 'LIVE';
+    if (const {'river-forecast', 'sky-conditions'}.contains(kind)) {
+      return 'PARASHIKIM';
+    }
+    if (kind == 'solar-activity') return 'VËZHGIM GLOBAL';
     if (const {
       'quakes',
       'fire',

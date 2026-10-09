@@ -20,6 +20,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:workmanager/workmanager.dart';
 
 import 'data.dart';
+import 'public_forecasts.dart';
 import 'app_updates.dart';
 import 'country_silhouettes.dart';
 import 'map_markers.dart';
@@ -1007,6 +1008,33 @@ const layerInfo = [
 ];
 
 LayerInfo infoFor(String id) {
+  if (id == 'sky-conditions') {
+    return const LayerInfo(
+      'sky-conditions',
+      'Re, mjegull dhe erë',
+      'Parashikim për qytetet',
+      Icons.cloud_queue,
+      Color(0xff8ed7ff),
+    );
+  }
+  if (id == 'river-forecast') {
+    return const LayerInfo(
+      'river-forecast',
+      'Prurjet e lumenjve',
+      'Parashikim modelor 7-ditor',
+      Icons.water,
+      Color(0xff53d7ff),
+    );
+  }
+  if (id == 'solar-activity') {
+    return const LayerInfo(
+      'solar-activity',
+      'Aktiviteti diellor',
+      'Shkallët globale NOAA',
+      Icons.solar_power,
+      Color(0xffffc66d),
+    );
+  }
   if (id == 'tv') {
     return const LayerInfo(
       'tv',
@@ -1794,6 +1822,9 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
   bool showRadar = true;
   bool rainLegendDismissed = false;
   bool waterLegendDismissed = false;
+  bool solarLegendDismissed = false;
+  bool skyLegendDismissed = false;
+  int skyHoursAhead = 0;
   bool airLegendDismissed = false;
   bool mapLegendDismissed = false;
   final dismissedReferenceLegends = <String>{};
@@ -2916,6 +2947,10 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     if (enabled.contains('drinking-water'))
       ...?results['drinking-water']?.value,
     if (enabled.contains('river-levels')) ...?results['river-levels']?.value,
+    if (enabled.contains('river-forecast'))
+      ...?results['river-forecast']?.value,
+    if (enabled.contains('sky-conditions'))
+      ...?results['sky-conditions']?.value,
     if (enabled.contains('places')) ...?results['places']?.value,
     if (enabled.contains('cems')) ...?results['cems']?.value,
     if (enabled.contains('health-alerts')) ...?results['health-alerts']?.value,
@@ -3367,6 +3402,21 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     if (id == 'river-levels') {
       await _load(id, api.kosovoRiverLevels);
     }
+    if (id == 'river-forecast') {
+      await _load(id, () => api.riverForecasts(enabledNewsCountries));
+    }
+    if (id == 'sky-conditions') {
+      await _load(
+        id,
+        () => api.skyForCities(
+          cities
+              .where((place) => enabledNewsCountries.contains(place.country))
+              .toList(),
+          hoursAhead: skyHoursAhead,
+        ),
+      );
+    }
+    if (id == 'solar-activity') await _load(id, api.solarActivity);
     if (id == 'cems') await _load(id, api.copernicusEvents);
     if (id == 'air') await _loadAirQuality();
     if (id == 'marine') await _loadMarineWeather();
@@ -3563,10 +3613,11 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       'health-alerts',
       'food-alerts',
       'hydrology-alerts',
+      'solar-activity',
       'internet-outages',
       'landslides',
     ],
-    'weather' => ['weather', 'air', 'agriculture'],
+    'weather' => ['weather', 'air', 'sky-conditions', 'agriculture'],
     'services' => [
       'services',
       'pharmacies',
@@ -3584,7 +3635,14 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       'biodiversity',
       'satellite',
     ],
-    'sea' => ['marine', 'port-alerts', 'ships', 'water', 'drinking-water'],
+    'sea' => [
+      'marine',
+      'port-alerts',
+      'ships',
+      'water',
+      'drinking-water',
+      'river-forecast',
+    ],
     'transport' => [
       'planes',
       'airports',
@@ -3628,6 +3686,8 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       radar = null;
       rainLegendDismissed = true;
       waterLegendDismissed = true;
+      solarLegendDismissed = true;
+      skyLegendDismissed = true;
       airLegendDismissed = true;
       mapLegendDismissed = true;
       dismissedReferenceLegends.clear();
@@ -3653,10 +3713,12 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
         }
         if (id == 'territory') satelliteLegendDismissed = false;
         if (id == 'weather') rainLegendDismissed = false;
+        if (id == 'weather') skyLegendDismissed = false;
         if (id == 'weather') {
           airLegendDismissed = false;
         }
         if (id == 'sea') waterLegendDismissed = false;
+        if (id == 'alerts') solarLegendDismissed = false;
         if (id == 'news') {
           enabledNewsTypes.addAll(const {
             'good',
@@ -5422,6 +5484,96 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
   }
 
   List<Widget> _mapLegendWidgets([VoidCallback? refresh]) => [
+    if (enabled.contains('solar-activity') &&
+        results['solar-activity']?.value.isNotEmpty == true &&
+        showLegends &&
+        !solarLegendDismissed)
+      Dismissible(
+        key: const ValueKey('solar-activity-legend'),
+        direction: DismissDirection.horizontal,
+        onDismissed: (_) =>
+            _dismissMapLegend(() => solarLegendDismissed = true, refresh),
+        child: InkWell(
+          onTap: () => _eventDetails(results['solar-activity']!.value.first),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: ink.withValues(alpha: .82),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: Colors.amberAccent.withValues(alpha: .55),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.solar_power,
+                  color: Colors.amberAccent,
+                  size: 18,
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: AppText(
+                    results['solar-activity']!.value.first.title,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: muted, size: 17),
+              ],
+            ),
+          ),
+        ),
+      ),
+    if (enabled.contains('sky-conditions') &&
+        showLegends &&
+        !skyLegendDismissed)
+      Dismissible(
+        key: const ValueKey('sky-conditions-legend'),
+        direction: DismissDirection.horizontal,
+        onDismissed: (_) =>
+            _dismissMapLegend(() => skyLegendDismissed = true, refresh),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            color: ink.withValues(alpha: .82),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(
+              color: Colors.lightBlueAccent.withValues(alpha: .45),
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.cloud_queue,
+                color: Colors.lightBlueAccent,
+                size: 18,
+              ),
+              const SizedBox(width: 7),
+              AppText(
+                _ui(
+                  'Re/mjegull/erë +$skyHoursAhead h',
+                  'Cloud/fog/wind +$skyHoursAhead h',
+                ),
+                style: const TextStyle(fontSize: 11),
+              ),
+              Expanded(
+                child: Slider(
+                  value: skyHoursAhead.toDouble(),
+                  min: 0,
+                  max: 6,
+                  divisions: 6,
+                  activeColor: Colors.lightBlueAccent,
+                  onChanged: (value) =>
+                      setState(() => skyHoursAhead = value.round()),
+                  onChangeEnd: (_) => unawaited(_loadLayer('sky-conditions')),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     if (enabled.contains('water') &&
         results['water']?.value.isNotEmpty == true &&
         showLegends &&
@@ -5892,6 +6044,12 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       ('weather', 'Radar shiu', Icons.radar, Colors.lightBlueAccent),
       ('air', 'Ajër/UV/polen', Icons.air, Colors.tealAccent),
       (
+        'sky-conditions',
+        'Re, mjegull, erë',
+        Icons.cloud_queue,
+        Color(0xff8ed7ff),
+      ),
+      (
         'agriculture',
         'Bujqësi',
         Icons.agriculture_outlined,
@@ -5927,6 +6085,12 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
         'Lumenj/rezervuarë',
         Icons.water_damage_outlined,
         Colors.blueAccent,
+      ),
+      (
+        'solar-activity',
+        'Aktivitet diellor',
+        Icons.solar_power,
+        Colors.amberAccent,
       ),
       (
         'internet-outages',
@@ -6008,6 +6172,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       ('port-alerts', 'Njoftime detare', Icons.anchor, Colors.lightBlueAccent),
       ('ships', 'Porte dhe tragete', Icons.directions_boat, Colors.blueAccent),
       ('water', 'Ujërat e larjes', Icons.water_drop, Colors.tealAccent),
+      ('river-forecast', 'Prurjet e lumenjve', Icons.water, Colors.cyanAccent),
       (
         'drinking-water',
         'Ujë i pijshëm',
@@ -6078,6 +6243,8 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
         if (id == 'weather' && turnOn) rainLegendDismissed = false;
         if (id == 'air' && turnOn) airLegendDismissed = false;
         if (id == 'water' && turnOn) waterLegendDismissed = false;
+        if (id == 'solar-activity' && turnOn) solarLegendDismissed = false;
+        if (id == 'sky-conditions' && turnOn) skyLegendDismissed = false;
         if (_referenceLayerIds.contains(id) && turnOn) {
           mapLegendDismissed = false;
           dismissedReferenceLegends.remove(id);
@@ -9559,6 +9726,8 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       results.remove('biodiversity');
       results.remove('water');
       results.remove('airports');
+      results.remove('river-forecast');
+      results.remove('sky-conditions');
     });
     for (final layer in const [
       'population',
@@ -9566,6 +9735,8 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       'biodiversity',
       'water',
       'airports',
+      'river-forecast',
+      'sky-conditions',
       'official-maps',
     ]) {
       if (enabled.contains(layer)) unawaited(_loadLayer(layer));
