@@ -39,13 +39,9 @@ Zgjedhjet e kategorive ruhen në pajisje. Harta dhe informacioni i hapur më par
 
 ## 🖼️ Pamje nga aplikacioni
 
-| Harta dhe lajmet | Ngjarjet |
-| :---: | :---: |
-| <img src="docs/screenshots/news.png" alt="Harta me lajme" width="160"> | <img src="docs/screenshots/events.png" alt="Ngjarjet" width="160"> |
-| SYRI Tani | Cilësimet |
-| <img src="docs/screenshots/syri-now.png" alt="Përmbledhja SYRI Tani" width="160"> | <img src="docs/screenshots/settings.png" alt="Cilësimet" width="160"> |
-| Mbështet SYRI-n | |
-| <img src="docs/screenshots/support.png" alt="Faqja e mbështetjes" width="160"> | |
+| Harta dhe lajmet | Ngjarjet | SYRI Tani | Cilësimet |
+| :---: | :---: | :---: | :---: |
+| <img src="docs/screenshots/news.png" alt="Harta me lajme" width="125"> | <img src="docs/screenshots/events.png" alt="Ngjarjet" width="125"> | <img src="docs/screenshots/syri-now.png" alt="Përmbledhja SYRI Tani" width="125"> | <img src="docs/screenshots/settings.png" alt="Cilësimet" width="125"> |
 
 ## ⬇️ Shkarkimi dhe instalimi në Android
 
