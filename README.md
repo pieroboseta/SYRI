@@ -1,4 +1,4 @@
-# SYRI
+# SYRI - public information map for Albania, Kosovo, Montenegro and North Macedonia
 
 **Informacioni publik i katër vendeve, në një hartë.** SYRI është një aplikacion Android për Shqipërinë, Kosovën, Malin e Zi dhe Maqedoninë e Veriut. Ai bashkon raportime, alarme dhe të dhëna nga burime të ndryshme, duke të lejuar të kalosh nga pamja e përgjithshme te burimi origjinal i çdo informacioni.
 
