@@ -25,4 +25,15 @@ void main() {
     expect(eventFromNotificationPayload(weatherNotificationPayload), isNull);
     expect(isWeatherNotificationPayload(weatherNotificationPayload), isTrue);
   });
+
+  test('update notification opens only the SYRI GitHub release', () {
+    const page = 'https://github.com/pieroboseta/SYRI/releases/tag/v0.19.39';
+    expect(updateUrlFromNotificationPayload(updateNotificationPayload(page)),
+        page);
+    expect(
+      updateUrlFromNotificationPayload(
+          updateNotificationPayload('https://example.com/fake.apk')),
+      isNull,
+    );
+  });
 }

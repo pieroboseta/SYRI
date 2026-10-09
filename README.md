@@ -13,11 +13,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/pieroboseta/SYRI/releases/download/v0.19.37/SYRI-v0.19.37-release.apk">
+  <a href="https://github.com/pieroboseta/SYRI/releases/latest/download/SYRI-Android.apk">
     <img src="https://img.shields.io/badge/SHKARKO-APK%20p%C3%ABr%20Android-b9f56b?style=for-the-badge&logo=android&logoColor=09201c" alt="Shkarko APK-në për Android">
   </a>
   <br>
-  <sub>Versioni 0.19.37 · shkarkim direkt nga GitHub Releases</sub>
+  <sub>Versioni më i fundit · shkarkim direkt nga GitHub Releases</sub>
 </p>
 
 ## Çfarë mund të bësh
@@ -49,13 +49,15 @@ Zgjedhjet e kategorive ruhen në pajisje. Harta dhe informacioni i hapur më par
 
 ## Shkarkimi dhe instalimi në Android
 
-**[⬇ Shkarko direkt SYRI-v0.19.37-release.apk](https://github.com/pieroboseta/SYRI/releases/download/v0.19.37/SYRI-v0.19.37-release.apk)** · [Shiko versionet e publikuara](https://github.com/pieroboseta/SYRI/releases)
+**[⬇ Shkarko direkt SYRI-Android.apk](https://github.com/pieroboseta/SYRI/releases/latest/download/SYRI-Android.apk)** · [Shiko versionet e publikuara](https://github.com/pieroboseta/SYRI/releases)
 
 1. Shkarko APK-në në telefon dhe hape nga shfletuesi ose nga aplikacioni i skedarëve.
 2. Nëse Android nuk lejon instalimin, hap **Cilësimet → Aplikacionet → Qasje e veçantë → Instalo aplikacione të panjohura** (*Settings → Apps → Special app access → Install unknown apps*). Zgjidh shfletuesin ose aplikacionin e skedarëve me të cilin hape APK-në dhe aktivizo **Lejo nga ky burim** (*Allow from this source*). Emrat e menuve mund të ndryshojnë sipas telefonit. Pastaj hape sërish APK-në. [Udhëzim nga Google](https://support.google.com/pixelphone/answer/7391672?hl=en).
 3. Nëse ke instaluar më parë një version prove të firmosur me çelësin **debug**, Android mund të mos lejojë përditësimin me APK-në e publikimit. Në atë rast ruaj cilësimet e rëndësishme, çinstalo versionin e provës dhe instalo këtë APK.
 
 Lejen e instalimit jepja vetëm aplikacionit nga i cili po hap APK-në. Mund ta çaktivizosh përsëri pas instalimit. Për siguri, shkarko SYRI-n vetëm nga kjo faqe zyrtare e projektit.
+
+Për të parë nëse ka version të ri, hap **Cilësimet → Përditësimi → Rifresko**. Kur del version i ri, butoni i shkarkimit hap publikimin përkatës në GitHub. SYRI kontrollon edhe periodikisht kur ka internet dhe mund të shfaqë një njoftim në aplikacion ose një njoftim Android, nëse i ke dhënë lejen e njoftimeve. Kontrolli në sfond varet nga kufizimet e Android-it dhe nuk kryhet domosdoshmërisht në të njëjtën orë çdo ditë. Përditësimi instalohet nga APK-ja e GitHub; aplikacioni nuk e instalon vetë.
 
 ## Burimet dhe kufizimet
 

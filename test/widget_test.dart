@@ -86,6 +86,16 @@ void main() {
     expect(tester.state(map), same(originalState));
   });
 
+  testWidgets('settings exposes a manual update check', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const SyriApp(loadData: false));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('settings-update')), findsOneWidget);
+    expect(find.byKey(const ValueKey('check-app-update')), findsOneWidget);
+  });
+
   test('city picker pins favorites and restores country and city order', () {
     final favorites = <String>{'Shkup', 'Budva'};
     final sample = cities.where(

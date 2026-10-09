@@ -23,6 +23,28 @@ String eventNotificationPayload(Event event) => jsonEncode({
 
 const weatherNotificationPayload = '{"type":"weather"}';
 
+String updateNotificationPayload(String pageUrl) =>
+    jsonEncode({'type': 'update', 'url': pageUrl});
+
+String? updateUrlFromNotificationPayload(String? payload) {
+  if (payload == null || payload.isEmpty) return null;
+  try {
+    final data = jsonDecode(payload);
+    if (data is! Map || data['type'] != 'update') return null;
+    final url = data['url'];
+    if (url is! String) return null;
+    final uri = Uri.tryParse(url);
+    if (uri?.scheme != 'https' ||
+        uri?.host != 'github.com' ||
+        !uri!.path.startsWith('/pieroboseta/SYRI/releases/tag/')) {
+      return null;
+    }
+    return url;
+  } catch (_) {
+    return null;
+  }
+}
+
 Event? eventFromNotificationPayload(String? payload) {
   if (payload == null || payload.isEmpty) return null;
   try {

@@ -355,6 +355,10 @@ class SyriInfoPage extends StatelessWidget {
         'Open “Sources and credits” to see where data comes from.',
       ),
       t(
+        'Te “Përditësimi”, prek Rifresko për të kontrolluar versionin e ri dhe hap GitHub për ta shkarkuar.',
+        'Under “Update”, tap Refresh to check for a new version and open GitHub to download it.',
+      ),
+      t(
         'Butoni me dorën dhe zemrën në fund hap faqen Mbështet, ku dhurimi është vullnetar.',
         'The hand-and-heart button in the dock opens Support, where donations are optional.',
       ),
@@ -460,8 +464,8 @@ class SyriInfoPage extends StatelessWidget {
       '9. Change language and check sources',
       'Shqip fillimisht, anglisht për vizitorët',
       'Albanian first, English for visitors',
-      'SYRI hapet në shqip. Aktivizo anglishten te cilësimi për vizitorët dhe ktheje sërish në shqip kur të duash. Te “Burimet dhe kreditet” shikon origjinën e të dhënave; te “Gjendja e burimeve” shikon nëse ato po përgjigjen. Butoni Mbështet në dock hap faqen e dhurimit vullnetar pa reklama.',
-      'SYRI starts in Albanian. Enable English in the visitor setting and switch back whenever you like. “Sources and credits” lists data origins; “Source status” shows whether sources are responding. The Support button in the dock opens an optional donation page without ads.',
+      'SYRI hapet në shqip. Aktivizo anglishten te cilësimi për vizitorët dhe ktheje sërish në shqip kur të duash. Te “Burimet dhe kreditet” shikon origjinën e të dhënave; te “Gjendja e burimeve” shikon nëse ato po përgjigjen. Te “Përditësimi” mund të kontrollosh GitHub manualisht; aplikacioni kontrollon edhe periodikisht dhe mund të të njoftojë kur del version i ri. Butoni Mbështet në dock hap faqen e dhurimit vullnetar pa reklama.',
+      'SYRI starts in Albanian. Enable English in the visitor setting and switch back whenever you like. “Sources and credits” lists data origins; “Source status” shows whether sources are responding. “Update” checks GitHub manually; the app also checks periodically and may notify you when a new version is available. The Support button in the dock opens an optional donation page without ads.',
     ),
     _InfoSection(
       Icons.offline_bolt_outlined,

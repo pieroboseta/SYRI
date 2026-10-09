@@ -13,12 +13,14 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_mlkit_translation/google_mlkit_translation.dart';
 import 'package:google_mlkit_language_id/google_mlkit_language_id.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:workmanager/workmanager.dart';
 
 import 'data.dart';
+import 'app_updates.dart';
 import 'country_silhouettes.dart';
 import 'map_markers.dart';
 import 'background_notifications.dart';
@@ -811,6 +813,11 @@ final Completer<void> _workmanagerReady = Completer<void>();
 Future<void> _configureBackgroundNotifications(bool enabled) async {
   if (Platform.isAndroid) await _workmanagerReady.future;
   await configureSyriBackgroundNotifications(enabled);
+}
+
+Future<void> _configureBackgroundUpdates() async {
+  if (Platform.isAndroid) await _workmanagerReady.future;
+  await configureSyriBackgroundUpdates();
 }
 
 Future<void> initializeNotifications() async {
@@ -1830,6 +1837,15 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
   Timer? _weatherToastTimer;
   Timer? _connectionTimer;
   Timer? _offlineNoticeTimer;
+  Timer? _updateNoticeTimer;
+  SyriRelease? _availableUpdate;
+  String _installedVersion = '';
+  DateTime? _lastUpdateCheck;
+  String? _updateCheckError;
+  bool _checkingUpdates = false;
+  bool? _updateNotificationPermissionGranted;
+  bool _showUpdateNotice = false;
+  bool _initialUpdateCheckStarted = false;
   bool? _online;
   bool _checkingConnection = false;
   bool _showOfflineNotice = false;
@@ -1889,6 +1905,8 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
         _eventDetails(event);
       } else if (isWeatherNotificationPayload(payload)) {
         _weatherDetails();
+      } else if (updateUrlFromNotificationPayload(payload) case final url?) {
+        unawaited(_open(url));
       }
     });
     WidgetsBinding.instance.scheduleFrame();
@@ -1901,6 +1919,8 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       // The default settings still allow the map to open.
     }
     if (!mounted) return;
+    await _loadUpdateStatus();
+    if (!mounted) return;
     _settingsLoaded = true;
     _finishWelcome();
     if (widget.loadData) unawaited(refresh());
@@ -1910,7 +1930,152 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     if (mounted && _showWelcome && _welcomeDelayElapsed && _settingsLoaded) {
       _welcomeSafetyTimer?.cancel();
       setState(() => _showWelcome = false);
+      if (!_initialUpdateCheckStarted && widget.loadData) {
+        _initialUpdateCheckStarted = true;
+        unawaited(_checkForUpdates());
+      }
     }
+  }
+
+  Future<void> _markAppForeground(bool visible) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('setting_app_foreground', visible);
+      if (visible) {
+        await prefs.setString(
+          'setting_app_foreground_at',
+          DateTime.now().toIso8601String(),
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadUpdateStatus() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final version = (await PackageInfo.fromPlatform()).version;
+      final cachedVersion = prefs.getString('setting_update_available_version');
+      final cachedUrl = prefs.getString('setting_update_available_url');
+      if (!mounted) return;
+      setState(() {
+        _installedVersion = version;
+        _lastUpdateCheck = DateTime.tryParse(
+          prefs.getString('setting_update_checked_at') ?? '',
+        );
+        if (cachedVersion != null &&
+            cachedUrl != null &&
+            isNewerSyriVersion(cachedVersion, version)) {
+          _availableUpdate = SyriRelease(
+            version: cachedVersion,
+            pageUrl: cachedUrl,
+          );
+        }
+      });
+      unawaited(_markAppForeground(true));
+      unawaited(_refreshUpdateNotificationPermission());
+    } catch (_) {
+      // Manual checking still reports an error instead of claiming up to date.
+    }
+  }
+
+  Future<void> _refreshUpdateNotificationPermission() async {
+    try {
+      final android = syriNotifications
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      final allowed = await android?.areNotificationsEnabled();
+      if (mounted) {
+        setState(() => _updateNotificationPermissionGranted = allowed);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _checkForUpdates({bool manual = false}) async {
+    if (_checkingUpdates || !mounted) return;
+    final now = DateTime.now();
+    if (!manual &&
+        _lastUpdateCheck != null &&
+        now.difference(_lastUpdateCheck!) < const Duration(hours: 24)) {
+      await _maybeShowUpdateNotice(_availableUpdate);
+      return;
+    }
+    setState(() {
+      _checkingUpdates = true;
+      _updateCheckError = null;
+    });
+    try {
+      final installed = _installedVersion.isNotEmpty
+          ? _installedVersion
+          : (await PackageInfo.fromPlatform()).version;
+      final latest = await fetchLatestSyriRelease();
+      final available =
+          latest != null && isNewerSyriVersion(latest.version, installed)
+          ? latest
+          : null;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('setting_update_checked_at', now.toIso8601String());
+      if (available == null) {
+        await prefs.remove('setting_update_available_version');
+        await prefs.remove('setting_update_available_url');
+      } else {
+        await prefs.setString(
+          'setting_update_available_version',
+          available.version,
+        );
+        await prefs.setString(
+          'setting_update_available_url',
+          available.pageUrl,
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        _installedVersion = installed;
+        _availableUpdate = available;
+        _lastUpdateCheck = now;
+      });
+      if (!manual) await _maybeShowUpdateNotice(available);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _updateCheckError = _ui(
+            'Nuk u kontrollua dot. Kontrollo internetin dhe provo sërish.',
+            'Could not check. Check your connection and try again.',
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _checkingUpdates = false);
+    }
+  }
+
+  Future<void> _maybeShowUpdateNotice(SyriRelease? release) async {
+    if (release == null || !mounted || _showWelcome) return;
+    final prefs = await SharedPreferences.getInstance();
+    final lastShown = DateTime.tryParse(
+      prefs.getString('setting_update_banner_seen_at') ?? '',
+    );
+    if (prefs.getString('setting_update_banner_version') == release.version &&
+        lastShown != null &&
+        DateTime.now().difference(lastShown) < const Duration(hours: 24)) {
+      return;
+    }
+    await prefs.setString('setting_update_banner_version', release.version);
+    await prefs.setString(
+      'setting_update_banner_seen_at',
+      DateTime.now().toIso8601String(),
+    );
+    if (!mounted) return;
+    _updateNoticeTimer?.cancel();
+    setState(() => _showUpdateNotice = true);
+    _updateNoticeTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted) setState(() => _showUpdateNotice = false);
+    });
+  }
+
+  void _dismissUpdateNotice() {
+    _updateNoticeTimer?.cancel();
+    if (mounted) setState(() => _showUpdateNotice = false);
   }
 
   void _scheduleDataRender() {
@@ -1923,11 +2088,13 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    unawaited(_markAppForeground(false));
     WidgetsBinding.instance.removeObserver(this);
     pendingNotificationPayload.removeListener(_openPendingNotification);
     _weatherToastTimer?.cancel();
     _connectionTimer?.cancel();
     _offlineNoticeTimer?.cancel();
+    _updateNoticeTimer?.cancel();
     _welcomeTimer?.cancel();
     _welcomeSafetyTimer?.cancel();
     _dataRenderTimer?.cancel();
@@ -1946,9 +2113,12 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       if (widget.loadData) unawaited(_checkConnection());
+      if (widget.loadData && _settingsLoaded) unawaited(_checkForUpdates());
+      unawaited(_markAppForeground(true));
       _startPlaneTimer();
       if (autoRefreshOnResume && widget.loadData) refresh();
     } else {
+      unawaited(_markAppForeground(false));
       planeTimer?.cancel();
       motionTimer?.cancel();
     }
@@ -2225,6 +2395,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       );
     }
     unawaited(_configureBackgroundNotifications(notificationsEnabled));
+    if (widget.loadData) unawaited(_configureBackgroundUpdates());
     if (enabled.contains('satellite') && widget.loadData) {
       unawaited(_checkSatelliteImagery());
     }
@@ -2836,6 +3007,74 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _updateNoticeCard() {
+    final release = _availableUpdate!;
+    return Padding(
+      padding: const EdgeInsets.all(18),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 350),
+        child: Dismissible(
+          key: ValueKey('update-notice-${release.version}'),
+          direction: DismissDirection.horizontal,
+          onDismissed: (_) => _dismissUpdateNotice(),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: glassBlur, sigmaY: glassBlur),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 7, 7, 10),
+                decoration: glassSurface(
+                  20,
+                  outline: mint.withValues(alpha: .8),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.system_update_rounded,
+                          color: mint,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Text(
+                            _ui(
+                              'Përditësim i ri · ${release.version}',
+                              'New update · ${release.version}',
+                            ),
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                        IconButton(
+                          key: const ValueKey('dismiss-update-notice'),
+                          tooltip: _ui('Mbyll', 'Close'),
+                          onPressed: _dismissUpdateNotice,
+                          icon: const Icon(Icons.close_rounded, size: 19),
+                        ),
+                      ],
+                    ),
+                    TextButton.icon(
+                      key: const ValueKey('open-update-release'),
+                      onPressed: () {
+                        _dismissUpdateNotice();
+                        unawaited(_open(release.pageUrl));
+                      },
+                      icon: const Icon(Icons.open_in_new_rounded, size: 17),
+                      label: Text(_ui('Hap në GitHub', 'Open on GitHub')),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -3721,6 +3960,8 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
                   ),
                   bottomNavigationBar: landscape ? null : _dock(),
                 ),
+                if (_showUpdateNotice && _availableUpdate != null)
+                  Positioned.fill(child: Center(child: _updateNoticeCard())),
                 Positioned.fill(
                   child: IgnorePointer(
                     ignoring: !_showWelcome,
@@ -9362,6 +9603,113 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
           ),
           trailing: const Icon(Icons.chevron_right, color: mint),
           onTap: () => _openInfoPage(SyriInfoKind.guide),
+        ),
+      ),
+      Card(
+        key: const ValueKey('settings-update'),
+        color: _availableUpdate == null ? panel : mint.withValues(alpha: .12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: _availableUpdate == null
+                ? Colors.white10
+                : mint.withValues(alpha: .6),
+          ),
+        ),
+        child: Column(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.system_update_rounded, color: mint),
+              title: Text(
+                _ui('Përditësimi', 'Update'),
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              subtitle: Text(
+                _checkingUpdates
+                    ? _ui('Po kontrollohet GitHub…', 'Checking GitHub…')
+                    : _updateCheckError ??
+                          (_availableUpdate != null
+                              ? _ui(
+                                  'Versioni ${_availableUpdate!.version} është gati',
+                                  'Version ${_availableUpdate!.version} is available',
+                                )
+                              : _lastUpdateCheck != null
+                              ? _ui(
+                                  'Aplikacioni është i përditësuar',
+                                  'The app is up to date',
+                                )
+                              : _ui(
+                                  'Prek rifreskimin për të kontrolluar',
+                                  'Tap refresh to check for updates',
+                                )),
+                style: TextStyle(
+                  color: _updateCheckError == null ? muted : Colors.amber,
+                  fontSize: 12,
+                ),
+              ),
+              trailing: _checkingUpdates
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : IconButton(
+                      key: const ValueKey('check-app-update'),
+                      tooltip: _ui(
+                        'Kontrollo për përditësim',
+                        'Check for update',
+                      ),
+                      onPressed: () =>
+                          unawaited(_checkForUpdates(manual: true)),
+                      icon: const Icon(Icons.refresh_rounded, color: mint),
+                    ),
+              onTap: _checkingUpdates
+                  ? null
+                  : () => unawaited(_checkForUpdates(manual: true)),
+            ),
+            if (_availableUpdate case final release?)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 9),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    key: const ValueKey('download-app-update'),
+                    onPressed: () => unawaited(_open(release.pageUrl)),
+                    icon: const Icon(Icons.open_in_new_rounded),
+                    label: Text(_ui('Hap në GitHub', 'Open on GitHub')),
+                  ),
+                ),
+              ),
+            if (_updateNotificationPermissionGranted == false)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 0, 10, 5),
+                child: TextButton.icon(
+                  key: const ValueKey('allow-update-alerts'),
+                  onPressed: () async {
+                    final allowed = await _requestNotificationPermission();
+                    if (!mounted) return;
+                    setState(
+                      () => _updateNotificationPermissionGranted = allowed,
+                    );
+                    if (!allowed) {
+                      _toast(
+                        _ui(
+                          'Lejo njoftimet për SYRI te cilësimet e telefonit.',
+                          'Allow SYRI notifications in your phone settings.',
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.notifications_outlined, size: 18),
+                  label: Text(
+                    _ui(
+                      'Lejo njoftimet për përditësimet',
+                      'Allow update notifications',
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
       Card(

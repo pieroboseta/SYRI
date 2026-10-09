@@ -4,34 +4,113 @@ import 'dart:ui';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 
 import 'data.dart';
+import 'app_updates.dart';
 import 'notification_payload.dart';
 import 'news_sources.dart';
 
 const syriBackgroundTask = 'syri-public-alert-check';
+const syriUpdateTask = 'syri-app-update-check';
 
 @pragma('vm:entry-point')
 void syriBackgroundDispatcher() {
   Workmanager().executeTask((task, input) async {
-    if (task != syriBackgroundTask) return true;
+    if (task != syriBackgroundTask && task != syriUpdateTask) return true;
     DartPluginRegistrant.ensureInitialized();
     try {
-      await checkSyriBackgroundAlerts();
+      if (task == syriUpdateTask) {
+        await checkSyriBackgroundUpdate();
+      } else {
+        await checkSyriBackgroundAlerts();
+      }
       return true;
     } catch (_) {
       try {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(
-          'setting_background_error_at',
+          task == syriUpdateTask
+              ? 'setting_update_background_error_at'
+              : 'setting_background_error_at',
           DateTime.now().toIso8601String(),
         );
       } catch (_) {}
       return false;
     }
   });
+}
+
+Future<void> configureSyriBackgroundUpdates() async {
+  if (!Platform.isAndroid) return;
+  try {
+    await Workmanager().registerPeriodicTask(
+      syriUpdateTask,
+      syriUpdateTask,
+      frequency: const Duration(hours: 24),
+      existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+      constraints: Constraints(networkType: NetworkType.connected),
+    );
+  } catch (_) {
+    // The foreground check still works if Android does not schedule the job.
+  }
+}
+
+Future<void> checkSyriBackgroundUpdate() async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.reload();
+  final installed = (await PackageInfo.fromPlatform()).version;
+  final release = await fetchLatestSyriRelease();
+  final now = DateTime.now();
+  await prefs.setString('setting_update_checked_at', now.toIso8601String());
+  if (release == null || !isNewerSyriVersion(release.version, installed)) {
+    await prefs.remove('setting_update_available_version');
+    await prefs.remove('setting_update_available_url');
+    return;
+  }
+  await prefs.setString('setting_update_available_version', release.version);
+  await prefs.setString('setting_update_available_url', release.pageUrl);
+  final foregroundAt = DateTime.tryParse(
+    prefs.getString('setting_app_foreground_at') ?? '',
+  );
+  final recentlyForeground = prefs.getBool('setting_app_foreground') == true &&
+      foregroundAt != null &&
+      now.difference(foregroundAt) < const Duration(minutes: 5);
+  if (prefs.getString('setting_update_notified_version') == release.version ||
+      recentlyForeground) {
+    return;
+  }
+  final notifications = FlutterLocalNotificationsPlugin();
+  await notifications.initialize(
+    settings: const InitializationSettings(
+      android: AndroidInitializationSettings('syri_launcher'),
+    ),
+  );
+  final android = notifications
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >();
+  if (await android?.areNotificationsEnabled() != true) return;
+  await notifications.show(
+    id: 0x53595249,
+    title: 'Përditësim i ri i SYRI',
+    body:
+        'Versioni ${release.version} është gati. Prek për ta shkarkuar nga GitHub.',
+    payload: updateNotificationPayload(release.pageUrl),
+    notificationDetails: const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'syri_updates',
+        'Përditësimet e SYRI',
+        channelDescription: 'Versionet e reja të aplikacionit SYRI',
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+        playSound: false,
+      ),
+    ),
+  );
+  await prefs.setString('setting_update_notified_version', release.version);
 }
 
 Future<void> configureSyriBackgroundNotifications(bool enabled) async {
