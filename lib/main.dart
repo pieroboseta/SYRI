@@ -1804,7 +1804,9 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
   final sourceCheckedAt = <String, DateTime>{};
   City city = cities.first;
   FeedResult<Weather>? weather;
-  FeedResult<RadarLayer>? radar;
+  FeedResult<List<RadarLayer>>? radar;
+  int radarFrameIndex = 0;
+  DateTime? radarForecastStartUtc;
   FeedResult<AirQuality>? airQuality;
   final regionalAirQuality = <String, FeedResult<AirQuality>>{};
   bool regionalAirQualityLoading = false;
@@ -3903,7 +3905,46 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       final value = await api.radar();
       if (mounted) {
         setState(() {
+          final previousFrames = radar?.value;
+          final previousForecastStep =
+              previousFrames != null && radarFrameIndex >= previousFrames.length
+              ? radarFrameIndex - previousFrames.length
+              : null;
+          final wasAtLatest =
+              previousFrames == null ||
+              radarFrameIndex >= previousFrames.length - 1;
+          final previousTime = previousFrames == null || previousFrames.isEmpty
+              ? null
+              : previousFrames[radarFrameIndex.clamp(
+                      0,
+                      previousFrames.length - 1,
+                    )]
+                    .time;
           radar = value;
+          radarFrameIndex = value.value.length - 1;
+          final nowUtc = DateTime.now().toUtc();
+          radarForecastStartUtc = DateTime.utc(
+            nowUtc.year,
+            nowUtc.month,
+            nowUtc.day,
+            nowUtc.hour + 1,
+          );
+          if (previousForecastStep != null) {
+            radarFrameIndex = value.value.length + previousForecastStep;
+          } else if (!wasAtLatest && previousTime != null) {
+            var smallestDifference = value.value.last.time
+                .difference(previousTime)
+                .abs();
+            for (var index = 0; index < value.value.length; index++) {
+              final difference = value.value[index].time
+                  .difference(previousTime)
+                  .abs();
+              if (difference < smallestDifference) {
+                smallestDifference = difference;
+                radarFrameIndex = index;
+              }
+            }
+          }
           if (value.stale) failures.add('radar');
         });
       }
@@ -4727,8 +4768,39 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     });
   }
 
+  int get _radarTimelineMax =>
+      (radar?.value.length ?? 1) - 1 + (_online == false ? 0 : 6);
+
+  bool get _radarIsForecast =>
+      radar != null &&
+      _online != false &&
+      radarFrameIndex >= radar!.value.length;
+
+  DateTime get _radarForecastTime =>
+      (radarForecastStartUtc ?? DateTime.now().toUtc()).add(
+        Duration(hours: radarFrameIndex - (radar?.value.length ?? 0)),
+      );
+
+  String get _radarTileUrl {
+    final frames = radar!.value;
+    if (!_radarIsForecast) {
+      return frames[radarFrameIndex.clamp(0, frames.length - 1)].tileUrl;
+    }
+    final time = _radarForecastTime;
+    final stamp =
+        '${time.year}${time.month.toString().padLeft(2, '0')}'
+        '${time.day.toString().padLeft(2, '0')}'
+        '${time.hour.toString().padLeft(2, '0')}';
+    return 'https://weathermaps.weatherapi.com/precip/tiles/$stamp/{z}/{x}/{y}.png';
+  }
+
   Widget _mapPage({required bool landscape}) {
     final viewport = MediaQuery.sizeOf(context);
+    final radarTimelineVisible =
+        enabled.contains('weather') &&
+        showRadar &&
+        radar != null &&
+        _radarTimelineMax > 0;
     final events = mapEvents;
     // At a continental scale even compact symbols obscure the map. Keep
     // recognizable icons at country and regional scales and reserve dots for
@@ -4894,10 +4966,37 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
                     ),
                   if (enabled.contains('weather') && showRadar && radar != null)
                     TileLayer(
-                      urlTemplate: radar!.value.tileUrl,
+                      urlTemplate: _radarTileUrl,
                       userAgentPackageName: 'al.syri.syri',
-                      maxNativeZoom: 7,
+                      maxNativeZoom: _radarIsForecast ? 6 : 7,
                       maxZoom: 19,
+                      tileBuilder: _radarIsForecast
+                          ? (context, child, tile) => ColorFiltered(
+                              colorFilter: const ColorFilter.matrix([
+                                1,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                1,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                1,
+                                0,
+                                0,
+                                -1,
+                                0,
+                                0,
+                                1,
+                                0,
+                              ]),
+                              child: child,
+                            )
+                          : null,
                       tileDisplay: const TileDisplay.fadeIn(
                         duration: Duration(milliseconds: 250),
                       ),
@@ -4982,11 +5081,18 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
           ),
         ),
         Positioned(top: 14, left: 0, right: 0, child: _mapHeader()),
+        if (radarTimelineVisible)
+          Positioned(
+            left: landscape ? 84 : 0,
+            right: landscape ? 68 : 0,
+            bottom: landscape ? 8 : 92,
+            child: _radarTimeline(),
+          ),
         if (_mapSourcesLoading)
           Positioned(
             left: 0,
             right: 0,
-            bottom: landscape ? 12 : 92,
+            bottom: landscape ? 12 : (radarTimelineVisible ? 188 : 92),
             child: Center(
               child: IgnorePointer(
                 child: Semantics(
@@ -5032,7 +5138,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
           ),
         Positioned(
           right: 11,
-          bottom: landscape ? 8 : 92,
+          bottom: landscape ? 8 : (radarTimelineVisible ? 188 : 92),
           child: Flex(
             direction: Axis.vertical,
             mainAxisSize: MainAxisSize.min,
@@ -5075,7 +5181,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
         ),
         Positioned(
           left: 8,
-          bottom: landscape ? 0 : 88,
+          bottom: landscape ? 0 : (radarTimelineVisible ? 184 : 88),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             mainAxisSize: MainAxisSize.min,
@@ -5100,7 +5206,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
                         [
                           '© OSM',
                           if (enabled.contains('weather') && radar != null)
-                            'RainViewer',
+                            _radarIsForecast ? 'WeatherAPI.com' : 'RainViewer',
                           if (enabled.contains('land-cover')) 'ESA WorldCover',
                         ].join(' · '),
                         style: TextStyle(
@@ -6612,6 +6718,113 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     ],
   );
 
+  Widget _radarTimeline() {
+    final forecast = _radarIsForecast;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Container(
+            key: const ValueKey('radar-timeline'),
+            padding: const EdgeInsets.fromLTRB(12, 7, 12, 5),
+            decoration: BoxDecoration(
+              color: ink.withValues(alpha: .88),
+              borderRadius: BorderRadius.circular(17),
+              border: Border.all(
+                color: (forecast ? Colors.lightBlueAccent : mint).withValues(
+                  alpha: .46,
+                ),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      forecast
+                          ? Icons.cloud_outlined
+                          : Icons.water_drop_outlined,
+                      color: forecast ? Colors.lightBlueAccent : mint,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '${_ui(forecast ? 'Parashikim reshjesh' : 'Radar shiu', forecast ? 'Rain forecast' : 'Rain radar')} · ${_radarFrameTime()}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      forecast ? 'WeatherAPI.com' : 'RainViewer',
+                      style: const TextStyle(color: muted, fontSize: 9),
+                    ),
+                  ],
+                ),
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 2,
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 6,
+                    ),
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: 12,
+                    ),
+                  ),
+                  child: Slider(
+                    value: radarFrameIndex
+                        .clamp(0, _radarTimelineMax)
+                        .toDouble(),
+                    min: 0,
+                    max: _radarTimelineMax.toDouble(),
+                    divisions: _radarTimelineMax,
+                    activeColor: forecast ? Colors.lightBlueAccent : mint,
+                    inactiveColor: muted.withValues(alpha: .36),
+                    onChanged: (value) =>
+                        setState(() => radarFrameIndex = value.round()),
+                  ),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _ui('Më herët', 'Earlier'),
+                      style: const TextStyle(color: muted, fontSize: 9),
+                    ),
+                    Text(
+                      _ui('Tani', 'Now'),
+                      style: const TextStyle(color: muted, fontSize: 9),
+                    ),
+                    Text(
+                      _online == false ? '' : '+6 h',
+                      style: const TextStyle(color: muted, fontSize: 9),
+                    ),
+                  ],
+                ),
+                if (forecast)
+                  Text(
+                    _ui(
+                      'Model, jo radar · për sigurinë ndiq njoftimet zyrtare',
+                      'Model, not radar · follow official alerts for safety',
+                    ),
+                    style: const TextStyle(color: muted, fontSize: 9),
+                    textAlign: TextAlign.center,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _rainLegend() => ClipRRect(
     borderRadius: BorderRadius.circular(16),
     child: BackdropFilter(
@@ -6625,16 +6838,23 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
         ),
         child: Column(
           children: [
-            const Row(
+            Row(
               children: [
-                AppText(
-                  'Radar shiu · Intensiteti i reshjeve',
-                  style: TextStyle(fontSize: 10, color: Colors.white),
+                Expanded(
+                  child: Text(
+                    _ui(
+                      'Radar shiu · Intensiteti i reshjeve',
+                      'Rain radar · Precipitation intensity',
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 10, color: Colors.white),
+                  ),
                 ),
-                Spacer(),
-                AppText(
-                  'Radar live',
-                  style: TextStyle(fontSize: 10, color: muted),
+                const SizedBox(width: 6),
+                Text(
+                  _radarIsForecast ? 'WeatherAPI.com' : 'RainViewer',
+                  style: const TextStyle(fontSize: 10, color: muted),
                 ),
               ],
             ),
@@ -6657,17 +6877,20 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
               ),
             ),
             const SizedBox(height: 3),
-            const Row(
+            Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                AppText('E lehtë', style: TextStyle(fontSize: 9, color: muted)),
-                AppText(
-                  'Mesatare',
-                  style: TextStyle(fontSize: 9, color: muted),
+                Text(
+                  _ui('E lehtë', 'Light'),
+                  style: const TextStyle(fontSize: 9, color: muted),
                 ),
-                AppText(
-                  'Shumë e fortë',
-                  style: TextStyle(fontSize: 9, color: muted),
+                Text(
+                  _ui('Mesatare', 'Moderate'),
+                  style: const TextStyle(fontSize: 9, color: muted),
+                ),
+                Text(
+                  _ui('Shumë e fortë', 'Very heavy'),
+                  style: const TextStyle(fontSize: 9, color: muted),
                 ),
               ],
             ),
@@ -6676,6 +6899,18 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       ),
     ),
   );
+
+  String _radarFrameTime() {
+    if (_radarIsForecast) {
+      final time = _radarForecastTime.toLocal();
+      return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    }
+    final frames = radar?.value;
+    if (frames == null || frames.isEmpty) return '--:--';
+    final time = frames[radarFrameIndex.clamp(0, frames.length - 1)].time
+        .toLocal();
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
 
   Widget _mapButton(
     IconData icon,

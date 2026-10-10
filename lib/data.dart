@@ -1438,7 +1438,7 @@ class SyriApi {
     return FeedResult(events, fetched, stale);
   }
 
-  Future<FeedResult<RadarLayer>> radar() async {
+  Future<FeedResult<List<RadarLayer>>> radar() async {
     final r = await fetch(
       'rainviewer_frames',
       'https://api.rainviewer.com/public/weather-maps.json',
@@ -1446,19 +1446,20 @@ class SyriApi {
     );
     final json = jsonDecode(r.value) as Map<String, dynamic>;
     final frames = (json['radar']?['past'] ?? []) as List;
-    if (frames.isEmpty) throw const FormatException('Pa radar');
-    final frame = frames.last;
-    return FeedResult(
-      RadarLayer(
-        '${json['host']}${frame['path']}/256/{z}/{x}/{y}/2/1_1.png',
-        DateTime.fromMillisecondsSinceEpoch(
-          (frame['time'] as num).round() * 1000,
-          isUtc: true,
-        ),
-      ),
-      r.fetched,
-      r.stale,
-    );
+    final host = json['host'] as String;
+    final layers = <RadarLayer>[
+      for (final frame in frames)
+        if (frame is Map && frame['path'] is String && frame['time'] is num)
+          RadarLayer(
+            '$host${frame['path']}/256/{z}/{x}/{y}/2/1_1.png',
+            DateTime.fromMillisecondsSinceEpoch(
+              ((frame['time'] as num).round()) * 1000,
+              isUtc: true,
+            ),
+          ),
+    ]..sort((a, b) => a.time.compareTo(b.time));
+    if (layers.isEmpty) throw const FormatException('Pa radar');
+    return FeedResult(List.unmodifiable(layers), r.fetched, r.stale);
   }
 
   Future<FeedResult<List<Event>>> cameras() async {
