@@ -3,13 +3,11 @@
 **Informacioni publik i katër vendeve, në një hartë.** SYRI është një aplikacion Android për Shqipërinë, Kosovën, Malin e Zi dhe Maqedoninë e Veriut. Ai bashkon raportime, alarme dhe të dhëna nga burime të ndryshme, duke të lejuar të kalosh nga pamja e përgjithshme te burimi origjinal i çdo informacioni.
 
 <p align="center">
-  <a href="https://github.com/pieroboseta/SYRI/releases/download/v0.19.37/SYRI-guide.mp4">
+  <a href="https://github.com/pieroboseta/SYRI/releases/latest/download/SYRI-guide.mp4">
     <img src="docs/screenshots/demo-cover.jpg" alt="Video udhëzuese: si përdoret SYRI" width="245">
   </a>
   <br>
-  <a href="https://github.com/pieroboseta/SYRI/releases/download/v0.19.37/SYRI-guide.mp4"><strong>▶ Shiko videon: si përdoret SYRI</strong></a>
-  <br>
-  <sub>Videoja tregon përdorimin e aplikacionit; disa hollësi të pamjes mund të ndryshojnë në versionin më të ri.</sub>
+  <a href="https://github.com/pieroboseta/SYRI/releases/latest/download/SYRI-guide.mp4"><strong>▶ Shiko videon e re: si përdoret SYRI</strong></a>
 </p>
 
 <p align="center">
@@ -43,7 +41,7 @@ Te **Moti** mund të shohësh një shtresë të tejdukshme për retë, mjegullë
 
 | Harta dhe lajmet | Ngjarjet | SYRI Tani | Cilësimet |
 | :---: | :---: | :---: | :---: |
-| <img src="docs/screenshots/news.png" alt="Harta me lajme" width="125"> | <img src="docs/screenshots/events.png" alt="Ngjarjet" width="125"> | <img src="docs/screenshots/syri-now.png" alt="Përmbledhja SYRI Tani" width="125"> | <img src="docs/screenshots/settings.png" alt="Cilësimet" width="125"> |
+| <img src="docs/screenshots/news.png" alt="Harta me lajme" width="125"> | <img src="docs/screenshots/events.jpg" alt="Ngjarjet" width="125"> | <img src="docs/screenshots/syri-now.jpg" alt="Përmbledhja SYRI Tani" width="125"> | <img src="docs/screenshots/settings.jpg" alt="Cilësimet" width="125"> |
 
 ## ⬇️ Shkarkimi dhe instalimi në Android
 

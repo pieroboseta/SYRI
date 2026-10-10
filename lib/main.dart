@@ -1815,6 +1815,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
   bool largerMapIcons = false;
   FeedResult<MarineWeather>? marineWeather;
   LatLng? userPoint;
+  Timer? _userPointTimer;
   int tab = 0;
   int cityGeneration = 0;
   bool mapReady = false;
@@ -2139,6 +2140,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     _mapZoomRenderTimer?.cancel();
     _mapZoomSettleTimer?.cancel();
     _baseTileRetryTimer?.cancel();
+    _userPointTimer?.cancel();
     planeTimer?.cancel();
     motionTimer?.cancel();
     eventSearchController.dispose();
@@ -3982,7 +3984,11 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
   }
 
   Future<void> _locate() async {
-    setState(() => locating = true);
+    _userPointTimer?.cancel();
+    setState(() {
+      locating = true;
+      userPoint = null;
+    });
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
         _toast('Aktivizoni vendndodhjen ose zgjidhni qytetin.');
@@ -4004,8 +4010,10 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
         ),
       );
       if (!mounted) return;
-      userPoint = LatLng(position.latitude, position.longitude);
-      setState(() {});
+      setState(() => userPoint = LatLng(position.latitude, position.longitude));
+      _userPointTimer = Timer(const Duration(seconds: 5), () {
+        if (mounted) setState(() => userPoint = null);
+      });
       if (mapReady) mapController.move(userPoint!, 13);
     } catch (_) {
       _toast('Pozicioni nuk u gjet. Provoni përsëri.');
@@ -4958,6 +4966,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
                           width: 22,
                           height: 22,
                           child: Container(
+                            key: const ValueKey('temporary-user-location-dot'),
                             decoration: BoxDecoration(
                               color: Colors.blue,
                               shape: BoxShape.circle,
@@ -6603,57 +6612,6 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     ],
   );
 
-  void _geologyDetails() => _sheet(
-    Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _heading(
-          'Rreziku gjeologjik',
-          'Harta zyrtare sipas qarqeve nga Shërbimi Gjeologjik dhe ASIG.',
-        ),
-        _referenceLegendSection('geo-risk'),
-        const SizedBox(height: 12),
-        TextButton(
-          onPressed: () => _open('https://geoportal.asig.gov.al/'),
-          child: const AppText('Hap hartën zyrtare ↗'),
-        ),
-        _disableLayerButton('geo-risk'),
-      ],
-    ),
-    accent: Colors.orangeAccent,
-  );
-
-  void _landslideDetails() => _sheet(
-    Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _heading(
-          'Rreziku nga rrëshqitjet',
-          'NASA LHASA · përditësim afër kohës reale',
-        ),
-        const AppText(
-          'LHASA kombinon reshjet satelitore, lagështinë e tokës dhe pjerrësinë për të vlerësuar probabilitetin e rrëshqitjeve të shkaktuara nga shiu.',
-          style: TextStyle(height: 1.55),
-        ),
-        const SizedBox(height: 14),
-        _bullet('Mbulimi', 'Shqipëri dhe Kosovë'),
-        _bullet('Vonesa minimale', 'rreth 5 orë'),
-        _bullet('Rezolucioni', 'afërsisht 1 km'),
-        _bullet('Kuptimi', 'rrezik i modeluar, jo incident i konfirmuar'),
-        const SizedBox(height: 18),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            onPressed: () => _open('https://pmmpublisher.pps.eosdis.nasa.gov/'),
-            icon: const Icon(Icons.open_in_new),
-            label: const AppText('Hap hartën NASA LHASA'),
-          ),
-        ),
-      ],
-    ),
-    accent: Colors.orangeAccent,
-  );
-
   Widget _rainLegend() => ClipRRect(
     borderRadius: BorderRadius.circular(16),
     child: BackdropFilter(
@@ -7106,67 +7064,6 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
         ],
       ),
       accent: Colors.cyanAccent,
-    );
-  }
-
-  void _agricultureDetails() {
-    final events = results['agriculture']?.value ?? const <Event>[];
-    final summary = events.where((event) => event.kind == 'agriculture-info');
-    final risks = events.where((event) => event.kind != 'agriculture-info');
-    final current = summary.isEmpty ? null : summary.first;
-    _sheet(
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _heading(
-            'Bujqësia në ${city.name}',
-            'Kushtet e tokës dhe motit nga Open-Meteo.',
-          ),
-          if (current == null)
-            const AppText('Të dhënat bujqësore nuk janë ende të disponueshme.')
-          else ...[
-            ...current.description
-                .split('\n')
-                .where((line) => line.trim().isNotEmpty)
-                .map((line) {
-                  final parts = line.split(': ');
-                  return _bullet(
-                    parts.length > 1 ? parts.first : 'Informacion',
-                    parts.length > 1 ? parts.skip(1).join(': ') : line,
-                  );
-                }),
-            const SizedBox(height: 12),
-            AppText(
-              risks.isEmpty
-                  ? 'Nuk ka prag alarmi bujqësor për ditën e sotme.'
-                  : '${risks.length} paralajmërime bujqësore aktive:',
-              style: TextStyle(
-                color: risks.isEmpty ? mint : Colors.orangeAccent,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            for (final risk in risks)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  infoFor(risk.kind).icon,
-                  color: infoFor(risk.kind).color,
-                ),
-                title: AppText(risk.title),
-                subtitle: AppText(
-                  risk.description.split('\n').first,
-                  style: const TextStyle(color: muted),
-                ),
-              ),
-          ],
-          TextButton(
-            onPressed: () => _open('https://open-meteo.com/en/docs'),
-            child: const AppText('Hap burimin ↗'),
-          ),
-          _disableLayerButton('agriculture'),
-        ],
-      ),
-      accent: Colors.lightGreenAccent,
     );
   }
 

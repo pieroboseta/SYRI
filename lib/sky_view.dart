@@ -12,8 +12,7 @@ class SkyObject {
   final double azimuth;
   final double? illumination;
 
-  const SkyObject(this.name, this.altitude, this.azimuth,
-      [this.illumination]);
+  const SkyObject(this.name, this.altitude, this.azimuth, [this.illumination]);
 
   bool get visible => altitude > 0;
 }
@@ -23,8 +22,11 @@ class _Equatorial {
   final double declination;
   final double? eclipticLongitude;
 
-  const _Equatorial(this.rightAscension, this.declination,
-      [this.eclipticLongitude]);
+  const _Equatorial(
+    this.rightAscension,
+    this.declination, [
+    this.eclipticLongitude,
+  ]);
 }
 
 double _wrap(double angle) {
@@ -39,13 +41,18 @@ _Equatorial _sun(double julianDay) {
   final days = julianDay - 2451545.0;
   final meanLongitude = (280.46 + 0.9856474 * days) * _degree;
   final anomaly = (357.528 + 0.9856003 * days) * _degree;
-  final longitude = meanLongitude +
+  final longitude =
+      meanLongitude +
       1.915 * _degree * math.sin(anomaly) +
       0.020 * _degree * math.sin(2 * anomaly);
   final obliquity = (23.439 - 0.0000004 * days) * _degree;
   return _Equatorial(
-    _wrap(math.atan2(math.cos(obliquity) * math.sin(longitude),
-        math.cos(longitude))),
+    _wrap(
+      math.atan2(
+        math.cos(obliquity) * math.sin(longitude),
+        math.cos(longitude),
+      ),
+    ),
     math.asin(math.sin(obliquity) * math.sin(longitude)),
     _wrap(longitude),
   );
@@ -60,11 +67,12 @@ _Equatorial _moon(double julianDay) {
   final perigee = (318.0634 + 0.1643573223 * days) * _degree;
   final anomaly = (115.3654 + 13.0649929509 * days) * _degree;
   const eccentricity = 0.0549;
-  final eccentricAnomaly = anomaly +
-      eccentricity * math.sin(anomaly) *
-          (1 + eccentricity * math.cos(anomaly));
+  final eccentricAnomaly =
+      anomaly +
+      eccentricity * math.sin(anomaly) * (1 + eccentricity * math.cos(anomaly));
   final x = 60.2666 * (math.cos(eccentricAnomaly) - eccentricity);
-  final y = 60.2666 *
+  final y =
+      60.2666 *
       math.sqrt(1 - eccentricity * eccentricity) *
       math.sin(eccentricAnomaly);
   final argument = math.atan2(y, x) + perigee;
@@ -77,11 +85,11 @@ _Equatorial _moon(double julianDay) {
   final latitude = math.asin(math.sin(argument) * math.sin(inclination));
   final obliquity = (23.439 - 0.0000004 * (julianDay - 2451545.0)) * _degree;
   final equatorialX = math.cos(longitude) * math.cos(latitude);
-  final equatorialY = math.sin(longitude) * math.cos(latitude) *
-          math.cos(obliquity) -
+  final equatorialY =
+      math.sin(longitude) * math.cos(latitude) * math.cos(obliquity) -
       math.sin(latitude) * math.sin(obliquity);
-  final equatorialZ = math.sin(longitude) * math.cos(latitude) *
-          math.sin(obliquity) +
+  final equatorialZ =
+      math.sin(longitude) * math.cos(latitude) * math.sin(obliquity) +
       math.sin(latitude) * math.cos(obliquity);
   return _Equatorial(
     _wrap(math.atan2(equatorialY, equatorialX)),
@@ -90,29 +98,44 @@ _Equatorial _moon(double julianDay) {
   );
 }
 
-SkyObject _horizontal(String name, _Equatorial equatorial, DateTime time,
-    double latitude, double longitude,
-    [double? illumination]) {
+SkyObject _horizontal(
+  String name,
+  _Equatorial equatorial,
+  DateTime time,
+  double latitude,
+  double longitude, [
+  double? illumination,
+]) {
   final jd = _julianDay(time);
   final sidereal = _wrap(
-      (280.46061837 + 360.98564736629 * (jd - 2451545.0) + longitude) *
-          _degree);
+    (280.46061837 + 360.98564736629 * (jd - 2451545.0) + longitude) * _degree,
+  );
   final hourAngle = sidereal - equatorial.rightAscension;
   final lat = latitude * _degree;
   final dec = equatorial.declination;
-  final altitude = math.asin(math.sin(lat) * math.sin(dec) +
-      math.cos(lat) * math.cos(dec) * math.cos(hourAngle));
-  final azimuth = _wrap(math.atan2(-math.sin(hourAngle),
-      math.tan(dec) * math.cos(lat) - math.sin(lat) * math.cos(hourAngle)));
+  final altitude = math.asin(
+    math.sin(lat) * math.sin(dec) +
+        math.cos(lat) * math.cos(dec) * math.cos(hourAngle),
+  );
+  final azimuth = _wrap(
+    math.atan2(
+      -math.sin(hourAngle),
+      math.tan(dec) * math.cos(lat) - math.sin(lat) * math.cos(hourAngle),
+    ),
+  );
   return SkyObject(name, altitude / _degree, azimuth / _degree, illumination);
 }
 
 ({SkyObject sun, SkyObject moon}) skySolarBodies(
-    DateTime time, double latitude, double longitude) {
+  DateTime time,
+  double latitude,
+  double longitude,
+) {
   final jd = _julianDay(time);
   final solar = _sun(jd);
   final lunar = _moon(jd);
-  final phase = (1 - math.cos(lunar.eclipticLongitude! - solar.eclipticLongitude!)) / 2;
+  final phase =
+      (1 - math.cos(lunar.eclipticLongitude! - solar.eclipticLongitude!)) / 2;
   return (
     sun: _horizontal('Sun', solar, time, latitude, longitude),
     moon: _horizontal('Moon', lunar, time, latitude, longitude, phase),
@@ -157,8 +180,25 @@ const _stars = <_Star>[
 ];
 
 const _constellations = <String, List<String>>{
-  'Orion': ['Betelgeuse', 'Bellatrix', 'Mintaka', 'Alnilam', 'Alnitak', 'Saiph', 'Rigel', 'Mintaka'],
-  'Ursa Major': ['Dubhe', 'Merak', 'Phecda', 'Megrez', 'Alioth', 'Mizar', 'Alkaid'],
+  'Orion': [
+    'Betelgeuse',
+    'Bellatrix',
+    'Mintaka',
+    'Alnilam',
+    'Alnitak',
+    'Saiph',
+    'Rigel',
+    'Mintaka',
+  ],
+  'Ursa Major': [
+    'Dubhe',
+    'Merak',
+    'Phecda',
+    'Megrez',
+    'Alioth',
+    'Mizar',
+    'Alkaid',
+  ],
   'Cassiopeia': ['Caph', 'Schedar', 'Gamma Cas', 'Ruchbah', 'Segin'],
   'Summer Triangle': ['Vega', 'Deneb', 'Altair', 'Vega'],
 };
@@ -169,8 +209,13 @@ class SkyView extends StatefulWidget {
   final String placeName;
   final bool english;
 
-  const SkyView({super.key, required this.latitude, required this.longitude,
-    required this.placeName, required this.english});
+  const SkyView({
+    super.key,
+    required this.latitude,
+    required this.longitude,
+    required this.placeName,
+    required this.english,
+  });
 
   @override
   State<SkyView> createState() => _SkyViewState();
@@ -202,40 +247,108 @@ class _SkyViewState extends State<SkyView> {
     final moonPercent = ((bodies.moon.illumination ?? 0) * 100).round();
     final daylight = bodies.sun.altitude > -6;
     final timeLabel = TimeOfDay.fromDateTime(time).format(context);
-    return Stack(children: [
-      Positioned.fill(child: IgnorePointer(child: ColoredBox(
-        color: const Color(0xff030c1c).withValues(alpha: .54)))),
-      Positioned.fill(child: IgnorePointer(child: CustomPaint(
-        painter: _SkyPainter(time, widget.latitude, widget.longitude,
-            widget.english)))),
-      Positioned(left: 12, right: 70, bottom: 108, child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 9, 12, 6),
-        decoration: BoxDecoration(
-          color: const Color(0xff112633).withValues(alpha: .78),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: _skyAccent.withValues(alpha: .56)),
-        ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('${widget.placeName} · $timeLabel · ${widget.english ? 'calculated sky' : 'qiell i llogaritur'}',
-            maxLines: 1, overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white, fontSize: 11)),
+    final controls = Container(
+      key: const ValueKey('sky-view-controls'),
+      padding: const EdgeInsets.fromLTRB(12, 9, 12, 6),
+      decoration: BoxDecoration(
+        color: const Color(0xff112633).withValues(alpha: .78),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _skyAccent.withValues(alpha: .56)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '${widget.placeName} · $timeLabel · ${widget.english ? 'calculated sky' : 'qiell i llogaritur'}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white, fontSize: 11),
+          ),
           Text(
             '${widget.english ? 'Sun' : 'Dielli'} ${bodies.sun.visible ? '↑' : '↓'}  ·  '
             '${widget.english ? 'Moon' : 'Hëna'} ${bodies.moon.visible ? '↑' : '↓'} $moonPercent%',
-            style: const TextStyle(color: _skyAccent, fontSize: 11)),
+            style: const TextStyle(color: _skyAccent, fontSize: 11),
+          ),
           if (daylight)
-            Text(widget.english ? 'Stars hidden by daylight' : 'Yjet nuk duken në dritë',
-              style: const TextStyle(color: Colors.white70, fontSize: 10)),
-          SliderTheme(data: SliderTheme.of(context).copyWith(
-            trackHeight: 2, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-            activeTrackColor: _skyAccent, thumbColor: _skyAccent),
-            child: Slider(value: _hoursOffset, min: -12, max: 12, divisions: 48,
-              onChanged: (value) => setState(() => _hoursOffset = value))),
-          Text(widget.english ? '−12 h     Now     +12 h' : '−12 orë     Tani     +12 orë',
-            style: const TextStyle(color: Colors.white70, fontSize: 9)),
-        ]),
-      )),
-    ]);
+            Text(
+              widget.english
+                  ? 'Stars hidden by daylight'
+                  : 'Yjet nuk duken në dritë',
+              style: const TextStyle(color: Colors.white70, fontSize: 10),
+            ),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 2,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              activeTrackColor: _skyAccent,
+              thumbColor: _skyAccent,
+            ),
+            child: Slider(
+              value: _hoursOffset,
+              min: -12,
+              max: 12,
+              divisions: 48,
+              onChanged: (value) => setState(() => _hoursOffset = value),
+            ),
+          ),
+          Text(
+            widget.english
+                ? '−12 h     Now     +12 h'
+                : '−12 orë     Tani     +12 orë',
+            style: const TextStyle(color: Colors.white70, fontSize: 9),
+          ),
+        ],
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final landscape = constraints.maxWidth > constraints.maxHeight;
+        final panelWidth = math.min(276.0, constraints.maxWidth * .34);
+        final topInset = MediaQuery.paddingOf(context).top;
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ColoredBox(
+                  color: const Color(0xff030c1c).withValues(alpha: .54),
+                ),
+              ),
+            ),
+            Positioned.fill(
+              right: landscape ? panelWidth + 28 : 0,
+              child: IgnorePointer(
+                child: CustomPaint(
+                  key: const ValueKey('sky-view-chart'),
+                  painter: _SkyPainter(
+                    time,
+                    widget.latitude,
+                    widget.longitude,
+                    widget.english,
+                  ),
+                ),
+              ),
+            ),
+            if (landscape)
+              Positioned(
+                top: topInset + 54,
+                right: 14,
+                width: panelWidth,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: math.max(
+                      100,
+                      constraints.maxHeight - topInset - 66,
+                    ),
+                  ),
+                  child: SingleChildScrollView(child: controls),
+                ),
+              )
+            else
+              Positioned(left: 12, right: 70, bottom: 108, child: controls),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -250,12 +363,19 @@ class _SkyPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final radius = math.min(size.width * .43, size.height * .27);
     final center = Offset(size.width / 2, size.height * .43);
-    final horizon = Paint()..color = _skyAccent.withValues(alpha: .45)
-      ..style = PaintingStyle.stroke..strokeWidth = 1;
+    final horizon = Paint()
+      ..color = _skyAccent.withValues(alpha: .45)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
     canvas.drawCircle(center, radius, horizon);
-    canvas.drawCircle(center, radius * .5,
-      Paint()..color = _skyAccent.withValues(alpha: .18)
-        ..style = PaintingStyle.stroke..strokeWidth = 1);
+    canvas.drawCircle(
+      center,
+      radius * .5,
+      Paint()
+        ..color = _skyAccent.withValues(alpha: .18)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
     for (final entry in <(String, Offset)>[
       (english ? 'N' : 'V', Offset(center.dx, center.dy - radius - 14)),
       (english ? 'E' : 'L', Offset(center.dx + radius + 10, center.dy)),
@@ -267,19 +387,29 @@ class _SkyPainter extends CustomPainter {
     Offset? projected(SkyObject object) {
       if (!object.visible) return null;
       final distance = radius * (90 - object.altitude) / 90;
-      return Offset(center.dx + distance * math.sin(object.azimuth * _degree),
-          center.dy - distance * math.cos(object.azimuth * _degree));
+      return Offset(
+        center.dx + distance * math.sin(object.azimuth * _degree),
+        center.dy - distance * math.cos(object.azimuth * _degree),
+      );
     }
+
     final positions = <String, Offset>{};
     final bodies = skySolarBodies(time, latitude, longitude);
     for (final star in bodies.sun.altitude > -6 ? <_Star>[] : _stars) {
-      final point = projected(_horizontal(star.name,
-        _Equatorial(star.ra * _degree, star.dec * _degree),
-        time, latitude, longitude));
+      final point = projected(
+        _horizontal(
+          star.name,
+          _Equatorial(star.ra * _degree, star.dec * _degree),
+          time,
+          latitude,
+          longitude,
+        ),
+      );
       if (point == null) continue;
       positions[star.name] = point;
     }
-    final linePaint = Paint()..color = _skyAccent.withValues(alpha: .42)
+    final linePaint = Paint()
+      ..color = _skyAccent.withValues(alpha: .42)
       ..strokeWidth = 1;
     for (final constellation in _constellations.values) {
       for (var i = 1; i < constellation.length; i++) {
@@ -293,11 +423,20 @@ class _SkyPainter extends CustomPainter {
       if (point == null) continue;
       canvas.drawCircle(point, star.size, Paint()..color = Colors.white);
       if (star.size >= 3) {
-        _label(canvas, star.name, point + const Offset(5, -13), Colors.white70, 9);
+        _label(
+          canvas,
+          star.name,
+          point + const Offset(5, -13),
+          Colors.white70,
+          9,
+        );
       }
     }
     for (final entry in _constellations.entries) {
-      final points = entry.value.map((name) => positions[name]).whereType<Offset>().toList();
+      final points = entry.value
+          .map((name) => positions[name])
+          .whereType<Offset>()
+          .toList();
       if (points.length < 3) continue;
       final x = points.map((p) => p.dx).reduce((a, b) => a + b) / points.length;
       final y = points.map((p) => p.dy).reduce((a, b) => a + b) / points.length;
@@ -307,23 +446,47 @@ class _SkyPainter extends CustomPainter {
       final point = projected(body);
       if (point == null) continue;
       final isSun = body.name == 'Sun';
-      canvas.drawCircle(point, isSun ? 9 : 8, Paint()
-        ..color = isSun ? const Color(0xffffd76b) : const Color(0xffe3ebff));
-      _label(canvas, isSun ? (english ? 'Sun' : 'Dielli') : (english ? 'Moon' : 'Hëna'),
-        point + const Offset(10, -12), Colors.white, 11);
+      canvas.drawCircle(
+        point,
+        isSun ? 9 : 8,
+        Paint()
+          ..color = isSun ? const Color(0xffffd76b) : const Color(0xffe3ebff),
+      );
+      _label(
+        canvas,
+        isSun ? (english ? 'Sun' : 'Dielli') : (english ? 'Moon' : 'Hëna'),
+        point + const Offset(10, -12),
+        Colors.white,
+        11,
+      );
     }
   }
 
-  void _label(Canvas canvas, String text, Offset point, Color color, double size) {
-    final painter = TextPainter(text: TextSpan(text: text,
-      style: TextStyle(color: color, fontSize: size,
-        shadows: const [Shadow(color: Colors.black, blurRadius: 4)])),
-      textDirection: TextDirection.ltr)..layout();
+  void _label(
+    Canvas canvas,
+    String text,
+    Offset point,
+    Color color,
+    double size,
+  ) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: color,
+          fontSize: size,
+          shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
     painter.paint(canvas, point);
   }
 
   @override
   bool shouldRepaint(covariant _SkyPainter oldDelegate) =>
-      time != oldDelegate.time || latitude != oldDelegate.latitude ||
-      longitude != oldDelegate.longitude || english != oldDelegate.english;
+      time != oldDelegate.time ||
+      latitude != oldDelegate.latitude ||
+      longitude != oldDelegate.longitude ||
+      english != oldDelegate.english;
 }
