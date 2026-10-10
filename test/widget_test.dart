@@ -339,12 +339,12 @@ void main() {
     expect(find.text('Më bli një kafe'), findsOneWidget);
     expect(find.text('Ose dhuro me PayPal'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('LinkedIn'),
+      find.text('Profili im në LinkedIn'),
       150,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('LinkedIn'), findsOneWidget);
-    expect(find.text('Më shkruaj'), findsOneWidget);
+    expect(find.text('Profili im në LinkedIn'), findsOneWidget);
+    expect(find.text('Më dërgo Email'), findsOneWidget);
     setSyriEnglish(true);
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();
@@ -358,12 +358,12 @@ void main() {
     expect(find.text('Buy me a coffee'), findsOneWidget);
     expect(find.text('Or donate with PayPal'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('LinkedIn'),
+      find.text('My LinkedIn profile'),
       150,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('LinkedIn'), findsOneWidget);
-    expect(find.text('Email Me'), findsOneWidget);
+    expect(find.text('My LinkedIn profile'), findsOneWidget);
+    expect(find.text('Send me an Email'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Hi, I’m Piero.'),
       -250,
@@ -731,6 +731,11 @@ void main() {
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();
     expect(find.text('Zgjidh njoftimet'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Cilësimet e njoftimeve'),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Cilësimet e njoftimeve'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Mosha maksimale e lajmeve'),

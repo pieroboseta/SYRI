@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -147,6 +148,56 @@ void main() {
     expect(readings.length, 1);
     expect(readings[selected.last.name]?.value.europeanAqi, 31);
   });
+
+  test(
+    'regional air cities appear before the slowest batch finishes',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final selected = cities.take(13).toList();
+      final slowBatch = Completer<void>();
+      final firstUpdate = Completer<Map<String, FeedResult<AirQuality>>>();
+      final api = SyriApi(
+        client: MockClient((request) async {
+          final count = request.url.queryParameters['latitude']!
+              .split(',')
+              .length;
+          if (count == 12) await slowBatch.future;
+          return http.Response(
+            jsonEncode(
+              count == 1
+                  ? {
+                      'current': {
+                        'time': '2026-09-29T12:00',
+                        'european_aqi': 31,
+                      },
+                    }
+                  : List.generate(
+                      count,
+                      (_) => {
+                        'current': {
+                          'time': '2026-09-29T12:00',
+                          'european_aqi': 25,
+                        },
+                      },
+                    ),
+            ),
+            200,
+          );
+        }),
+      );
+      final loading = api.airQualityForCities(
+        selected,
+        onBatch: (batch, done, total) {
+          if (!firstUpdate.isCompleted) firstUpdate.complete(batch);
+        },
+      );
+      final first = await firstUpdate.future;
+      expect(first.keys, contains(selected.last.name));
+      expect(first.length, 1);
+      slowBatch.complete();
+      expect((await loading).length, 13);
+    },
+  );
 
   test('inland bathing water keeps measured and unmeasured lakes distinct', () {
     final events = SyriApi().inlandBathingWater({

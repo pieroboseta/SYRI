@@ -1806,6 +1806,11 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
   FeedResult<RadarLayer>? radar;
   FeedResult<AirQuality>? airQuality;
   final regionalAirQuality = <String, FeedResult<AirQuality>>{};
+  bool regionalAirQualityLoading = false;
+  int regionalAirQualityBatchesDone = 0;
+  int regionalAirQualityBatchesTotal = 0;
+  int regionalAirQualityExpectedCities = 0;
+  int regionalAirQualityRequest = 0;
   bool largerMapIcons = false;
   FeedResult<MarineWeather>? marineWeather;
   LatLng? userPoint;
@@ -3661,14 +3666,19 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       _online == false &&
           (results[id] != null ||
               (id == 'weather' && radar != null) ||
-              (id == 'air' && airQuality != null) ||
+              (id == 'air' &&
+                  airQuality != null &&
+                  regionalAirQuality.isNotEmpty) ||
               (id == 'marine' && marineWeather != null))
       ? false
       : switch (id) {
           'tv' => false,
           'planes' => true,
           'weather' => radar == null || radar!.stale,
-          'air' => airQuality == null || airQuality!.stale,
+          'air' =>
+            airQuality == null ||
+                airQuality!.stale ||
+                regionalAirQuality.isEmpty,
           'marine' => marineWeather == null || marineWeather!.stale,
           _ => results[id] == null || results[id]!.stale,
         };
@@ -3799,14 +3809,39 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
   }
 
   Future<void> _loadRegionalAirQuality(int generation) async {
+    final request = ++regionalAirQualityRequest;
     final selected = cities
         .where((item) => enabledNewsCountries.contains(item.country))
         .toList();
-    final readings = await api.airQualityForCities(selected);
-    if (mounted && generation == cityGeneration) {
-      setState(() {
-        regionalAirQuality.addAll(readings);
-      });
+    if (!mounted) return;
+    setState(() {
+      regionalAirQualityLoading = true;
+      regionalAirQualityBatchesDone = 0;
+      regionalAirQualityBatchesTotal = (selected.length + 11) ~/ 12;
+      regionalAirQualityExpectedCities = selected.length;
+    });
+    try {
+      await api.airQualityForCities(
+        selected,
+        onBatch: (batch, done, total) {
+          if (!mounted ||
+              generation != cityGeneration ||
+              request != regionalAirQualityRequest) {
+            return;
+          }
+          setState(() {
+            regionalAirQuality.addAll(batch);
+            regionalAirQualityBatchesDone = done;
+            regionalAirQualityBatchesTotal = total;
+          });
+        },
+      );
+    } finally {
+      if (mounted &&
+          generation == cityGeneration &&
+          request == regionalAirQualityRequest) {
+        setState(() => regionalAirQualityLoading = false);
+      }
     }
   }
 
@@ -4636,7 +4671,9 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
   }
 
   bool get _mapSourcesLoading {
-    if (!widget.loadData || tab != 0 || busy.isEmpty) return false;
+    if (!widget.loadData || tab != 0) return false;
+    if (enabled.contains('air') && regionalAirQualityLoading) return true;
+    if (busy.isEmpty) return false;
     final visibleLayers = activeMapCategories.expand(_categoryLayers).toSet();
     return busy.any((key) {
       // Aircraft refresh in the background while their existing markers stay
@@ -5672,13 +5709,53 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
                         style: const TextStyle(fontSize: 11),
                       ),
                       AppText(
-                        '${regionalAirQuality.length} qytete · prek pikat anash për ajrin, UV dhe polenin',
+                        regionalAirQualityLoading
+                            ? _ui(
+                                'Po ngarkohen qytetet · $regionalAirQualityBatchesDone/$regionalAirQualityBatchesTotal grupe',
+                                'Loading cities · $regionalAirQualityBatchesDone/$regionalAirQualityBatchesTotal groups',
+                              )
+                            : regionalAirQuality.length <
+                                  regionalAirQualityExpectedCities
+                            ? _ui(
+                                '${regionalAirQuality.length}/$regionalAirQualityExpectedCities qytete · disa të dhëna nuk u ngarkuan',
+                                '${regionalAirQuality.length}/$regionalAirQualityExpectedCities cities · some data did not load',
+                              )
+                            : _ui(
+                                '${regionalAirQuality.length} qytete · prek pikat anash për ajrin, UV dhe polenin',
+                                '${regionalAirQuality.length} cities · tap the dots for air, UV and pollen',
+                              ),
                         style: const TextStyle(fontSize: 10, color: muted),
                       ),
+                      if (regionalAirQualityLoading) ...[
+                        const SizedBox(height: 5),
+                        LinearProgressIndicator(
+                          value: regionalAirQualityBatchesTotal == 0
+                              ? null
+                              : regionalAirQualityBatchesDone /
+                                    regionalAirQualityBatchesTotal,
+                          minHeight: 2,
+                          color: mint,
+                          backgroundColor: Colors.white.withValues(alpha: .12),
+                        ),
+                      ],
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right, size: 17, color: muted),
+                if (!regionalAirQualityLoading &&
+                    regionalAirQuality.length <
+                        regionalAirQualityExpectedCities)
+                  IconButton(
+                    tooltip: _ui('Provo sërish', 'Retry'),
+                    onPressed: () =>
+                        unawaited(_loadRegionalAirQuality(cityGeneration)),
+                    icon: const Icon(
+                      Icons.refresh_rounded,
+                      size: 18,
+                      color: mint,
+                    ),
+                  )
+                else
+                  const Icon(Icons.chevron_right, size: 17, color: muted),
               ],
             ),
           ),
@@ -9714,8 +9791,10 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       ),
       const SizedBox(height: 18),
       Center(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 12,
+          runSpacing: 8,
           children: [
             OutlinedButton.icon(
               onPressed: () => _open(creatorLinkedInUrl),
@@ -9727,7 +9806,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              label: const Text('LinkedIn'),
+              label: Text(_ui('Profili im në LinkedIn', 'My LinkedIn profile')),
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xff8ed7ff),
                 side: BorderSide(
@@ -9735,11 +9814,10 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
             OutlinedButton.icon(
               onPressed: () => _open('mailto:pierob004@gmail.com'),
               icon: const Icon(Icons.mail_outline_rounded, color: mint),
-              label: Text(_ui('Më shkruaj', 'Email Me')),
+              label: Text(_ui('Më dërgo Email', 'Send me an Email')),
               style: OutlinedButton.styleFrom(
                 foregroundColor: mint,
                 side: BorderSide(color: mint.withValues(alpha: .5)),
@@ -9766,6 +9844,13 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       enabledNewsCountries.contains(country)
           ? enabledNewsCountries.remove(country)
           : enabledNewsCountries.add(country);
+      regionalAirQuality.removeWhere(
+        (name, _) => !cities.any(
+          (place) =>
+              place.name == name &&
+              enabledNewsCountries.contains(place.country),
+        ),
+      );
       results.remove('protected');
       results.remove('biodiversity');
       results.remove('water');
@@ -9881,6 +9966,19 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
               onTap: _checkingUpdates
                   ? null
                   : () => unawaited(_checkForUpdates(manual: true)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _ui(
+                    'Versioni i instaluar: ${_installedVersion.isEmpty ? '—' : _installedVersion}',
+                    'Installed version: ${_installedVersion.isEmpty ? '—' : _installedVersion}',
+                  ),
+                  style: const TextStyle(fontSize: 11, color: muted),
+                ),
+              ),
             ),
             if (_availableUpdate case final release?)
               Padding(

@@ -1048,8 +1048,9 @@ class SyriApi {
   }
 
   Future<Map<String, FeedResult<AirQuality>>> airQualityForCities(
-    List<City> selectedCities,
-  ) async {
+    List<City> selectedCities, {
+    void Function(Map<String, FeedResult<AirQuality>>, int, int)? onBatch,
+  }) async {
     Future<Map<String, FeedResult<AirQuality>>> loadGroup(
       List<City> group,
     ) async {
@@ -1088,11 +1089,16 @@ class SyriApi {
       for (var start = 0; start < selectedCities.length; start += 12)
         selectedCities.skip(start).take(12).toList(),
     ];
-    final batches = await Future.wait(groups.map(loadGroup));
     final readings = <String, FeedResult<AirQuality>>{};
-    for (final batch in batches) {
-      readings.addAll(batch);
-    }
+    var completed = 0;
+    await Future.wait(
+      groups.map((group) async {
+        final batch = await loadGroup(group);
+        readings.addAll(batch);
+        completed++;
+        onBatch?.call(batch, completed, groups.length);
+      }),
+    );
     return readings;
   }
 
