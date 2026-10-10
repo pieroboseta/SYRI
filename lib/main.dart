@@ -1832,6 +1832,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
   bool solarLegendDismissed = false;
   bool skyLegendDismissed = false;
   int skyHoursAhead = 0;
+  int skyLoadRevision = 0;
   bool airLegendDismissed = false;
   bool mapLegendDismissed = false;
   double mapLegendSwipeDistance = 0;
@@ -2609,6 +2610,41 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     } finally {
       if (mounted) {
         busy.remove(key);
+        _scheduleDataRender();
+      }
+    }
+  }
+
+  Future<void> _loadSkyConditions() async {
+    final revision = ++skyLoadRevision;
+    final generation = cityGeneration;
+    final hour = skyHoursAhead;
+    final places = cities
+        .where((place) => enabledNewsCountries.contains(place.country))
+        .toList();
+    busy.add('sky-conditions');
+    failures.remove('sky-conditions');
+    sourceCheckedAt['sky-conditions'] = DateTime.now();
+    _scheduleDataRender();
+    try {
+      final value = await api.skyForCities(places, hoursAhead: hour);
+      if (!mounted ||
+          revision != skyLoadRevision ||
+          generation != cityGeneration ||
+          !enabled.contains('sky-conditions')) {
+        return;
+      }
+      results['sky-conditions'] = value;
+      if (value.stale) failures.add('sky-conditions');
+      _scheduleDataRender();
+    } catch (_) {
+      if (mounted && revision == skyLoadRevision) {
+        failures.add('sky-conditions');
+        _scheduleDataRender();
+      }
+    } finally {
+      if (mounted && revision == skyLoadRevision) {
+        busy.remove('sky-conditions');
         _scheduleDataRender();
       }
     }
@@ -3410,15 +3446,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       await _load(id, () => api.riverForecasts(enabledNewsCountries));
     }
     if (id == 'sky-conditions') {
-      await _load(
-        id,
-        () => api.skyForCities(
-          cities
-              .where((place) => enabledNewsCountries.contains(place.country))
-              .toList(),
-          hoursAhead: skyHoursAhead,
-        ),
-      );
+      await _loadSkyConditions();
     }
     if (id == 'solar-activity') await _load(id, api.solarActivity);
     if (id == 'cems') await _load(id, api.copernicusEvents);
@@ -5613,19 +5641,48 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
                   ),
                   Expanded(
                     child: Slider(
+                      key: const ValueKey('sky-forecast-hour-slider'),
                       value: skyHoursAhead.toDouble(),
                       min: 0,
                       max: 6,
                       divisions: 6,
                       activeColor: Colors.lightBlueAccent,
-                      onChanged: (value) =>
-                          setState(() => skyHoursAhead = value.round()),
-                      onChangeEnd: (_) =>
-                          unawaited(_loadLayer('sky-conditions')),
+                      onChanged: (value) {
+                        setState(() => skyHoursAhead = value.round());
+                        refresh?.call();
+                      },
+                      onChangeEnd: (_) async {
+                        final loading = _loadLayer('sky-conditions');
+                        refresh?.call();
+                        await loading;
+                        refresh?.call();
+                      },
                     ),
                   ),
                 ],
               ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    AppText(
+                      _ui('Tani', 'Now'),
+                      style: const TextStyle(fontSize: 10, color: muted),
+                    ),
+                    const AppText(
+                      '+6 h',
+                      style: TextStyle(fontSize: 10, color: muted),
+                    ),
+                  ],
+                ),
+              ),
+              if (busy.contains('sky-conditions'))
+                const LinearProgressIndicator(
+                  minHeight: 2,
+                  color: Colors.lightBlueAccent,
+                  backgroundColor: Colors.transparent,
+                ),
               if (_selectedSkyReading case final reading?) ...[
                 InkWell(
                   onTap: () => _eventDetails(reading),
@@ -5649,8 +5706,8 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
               ],
               AppText(
                 _ui(
-                  'E bardhë: re · cian: mjegull · shigjetat: erë',
-                  'White: cloud · cyan: fog · arrows: wind',
+                  'E bardhë: re · cian: mjegull · shigjetat: drejtimi i erës. Parashikim për qytetet, jo radar live.',
+                  'White: cloud · cyan: fog · arrows: wind direction. City forecast, not live radar.',
                 ),
                 style: const TextStyle(fontSize: 10, color: muted),
               ),
@@ -5865,7 +5922,9 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 12),
-                  ..._mapLegendWidgets(() => update(() {})),
+                  ..._mapLegendWidgets(() {
+                    if (context.mounted) update(() {});
+                  }),
                 ],
               ),
             ),

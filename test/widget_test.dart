@@ -952,6 +952,33 @@ void main() {
     },
   );
 
+  testWidgets('sky forecast slider updates its displayed hour in the legend', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const SyriApp(loadData: false));
+    await tester.pumpAndSettle();
+    final weather = find.byKey(const ValueKey('map-expand-weather'));
+    await tester.ensureVisible(weather);
+    await tester.tap(weather);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('map-subcategory-sky-conditions')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('map-legend-button')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Re/mjegull/erë +0 h'), findsOneWidget);
+    final slider = find.byKey(const ValueKey('sky-forecast-hour-slider'));
+    final bounds = tester.getRect(slider);
+    await tester.tapAt(
+      Offset(bounds.left + bounds.width * .72, bounds.center.dy),
+    );
+    await tester.pump();
+    expect(find.textContaining('Re/mjegull/erë +0 h'), findsNothing);
+    expect(tester.widget<Slider>(slider).value, greaterThan(0));
+  });
+
   testWidgets('language switch updates reused labels in both directions', (
     tester,
   ) async {
