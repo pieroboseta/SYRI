@@ -22,6 +22,7 @@ import 'package:workmanager/workmanager.dart';
 import 'data.dart';
 import 'public_forecasts.dart';
 import 'sky_overlay.dart';
+import 'sky_view.dart';
 import 'app_updates.dart';
 import 'country_silhouettes.dart';
 import 'map_markers.dart';
@@ -1833,6 +1834,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
   int skyHoursAhead = 0;
   bool airLegendDismissed = false;
   bool mapLegendDismissed = false;
+  double mapLegendSwipeDistance = 0;
   final dismissedReferenceLegends = <String>{};
   bool satelliteLegendDismissed = false;
   String? availableSatelliteDay;
@@ -1893,8 +1895,6 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
   Timer? _welcomeTimer;
   Timer? _welcomeSafetyTimer;
   Timer? _dataRenderTimer;
-
-  bool get _isAlbania => city.country == 'Shqipëri';
 
   List<City> get _orderedCities =>
       orderedCitiesForPicker(cities, favoriteCities);
@@ -3716,6 +3716,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
         activeMapCategories.add(id);
         selectedMapCategory = id;
         enabled.addAll(layers);
+        mapLegendDismissed = false;
         if (id == 'territory') {
           mapLegendDismissed = false;
           dismissedReferenceLegends.clear();
@@ -5508,7 +5509,9 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
   Widget _mapHeader() => Column(
     children: [
       _categoryPills(),
-      if (showLegends && _mapLegendWidgets().isNotEmpty) ...[
+      if (showLegends &&
+          !mapLegendDismissed &&
+          _mapLegendWidgets().isNotEmpty) ...[
         const SizedBox(height: 6),
         _mapLegendButton(),
       ],
@@ -5839,21 +5842,32 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     padding: const EdgeInsets.symmetric(horizontal: 14),
     child: Align(
       alignment: Alignment.centerRight,
-      child: ActionChip(
-        avatar: const Icon(Icons.info_outline, color: mint, size: 17),
-        label: AppText(_ui('Legjenda', 'Legends')),
-        onPressed: () => _sheet(
-          StatefulBuilder(
-            builder: (context, update) => Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const AppText(
-                  'Legjenda',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 12),
-                ..._mapLegendWidgets(() => update(() {})),
-              ],
+      child: GestureDetector(
+        key: const ValueKey('map-legend-button'),
+        onHorizontalDragStart: (_) => mapLegendSwipeDistance = 0,
+        onHorizontalDragUpdate: (details) =>
+            mapLegendSwipeDistance += details.delta.dx,
+        onHorizontalDragEnd: (_) {
+          if (mapLegendSwipeDistance.abs() > 36) {
+            setState(() => mapLegendDismissed = true);
+          }
+        },
+        child: ActionChip(
+          avatar: const Icon(Icons.info_outline, color: mint, size: 17),
+          label: AppText(_ui('Legjenda', 'Legends')),
+          onPressed: () => _sheet(
+            StatefulBuilder(
+              builder: (context, update) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const AppText(
+                    'Legjenda',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._mapLegendWidgets(() => update(() {})),
+                ],
+              ),
             ),
           ),
         ),
@@ -6331,6 +6345,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
       setState(() {
         activeMapCategories.add(parent);
         selectedMapCategory = parent;
+        mapLegendDismissed = false;
       });
     }
     if (id.startsWith('news:')) {
@@ -6389,46 +6404,7 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     unawaited(_saveSettings());
   }
 
-  Widget _individualReferenceLegend(String id) {
-    return InkWell(
-      onTap: _referenceLegendDetails,
-      borderRadius: BorderRadius.circular(16),
-      child: _referenceLegendSection(id),
-    );
-  }
-
-  void _referenceLegendDetails() {
-    final layers = _activeReferenceLayers;
-    _sheet(
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _heading(
-            'Si lexohet harta',
-            'Rreziku i përmbytjes dhe zonat e mbrojtura mbulojnë katër vendet. Dendësia e popullsisë, cilësia e lumenjve dhe stacionet e ajrit mbeten shtresa zyrtare vetëm për Shqipërinë. Vitet ndryshojnë sipas burimit.',
-          ),
-          for (final id in layers) ...[
-            _referenceLegendSection(id),
-            const SizedBox(height: 14),
-          ],
-          TextButton(
-            onPressed: () => _open(switch (city.country) {
-              'Kosovë' => 'https://geoportal.rks-gov.net/portal/main',
-              'Maqedonia e Veriut' => 'https://ossp.katastar.gov.mk/OSSP/',
-              'Mali i Zi' => 'https://geoportal.co.me/',
-              _ => 'https://geoportal.asig.gov.al/',
-            }),
-            child: AppText(
-              _isAlbania
-                  ? 'Hap Geoportalin ASIG ↗'
-                  : 'Hap Geoportalin e ${city.country} ↗',
-            ),
-          ),
-        ],
-      ),
-      accent: Colors.amberAccent,
-    );
-  }
+  Widget _individualReferenceLegend(String id) => _referenceLegendSection(id);
 
   Widget _referenceLegendSection(String id) {
     final info = infoFor(id);
@@ -7448,8 +7424,50 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
     return parts.join('\n');
   }
 
+  Future<void> _openSkyNow() async {
+    Navigator.of(context).pop();
+    setState(() => tab = 0);
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted) return;
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: _ui('Mbyll qiellin', 'Close sky view'),
+      barrierColor: Colors.black.withValues(alpha: .18),
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (dialogContext, _, _) => Material(
+        color: Colors.transparent,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: SkyView(
+                key: const ValueKey('syri-now-sky-view'),
+                latitude: city.lat,
+                longitude: city.lon,
+                placeName: city.name,
+                english: syriEnglish,
+              ),
+            ),
+            Positioned(
+              top: MediaQuery.paddingOf(dialogContext).top + 12,
+              right: 16,
+              child: IconButton.filledTonal(
+                key: const ValueKey('close-syri-now-sky'),
+                tooltip: _ui('Mbyll qiellin', 'Close sky view'),
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _syriNowDetails() {
     final updates = _briefingEvents;
+    final sky = skySolarBodies(DateTime.now(), city.lat, city.lon);
+    final moonPercent = ((sky.moon.illumination ?? 0) * 100).round();
     _sheet(
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -7591,6 +7609,56 @@ class _SyriHomeState extends State<SyriHome> with WidgetsBindingObserver {
               style: const TextStyle(color: muted, fontSize: 11),
             ),
           ],
+          const SizedBox(height: 16),
+          InkWell(
+            key: const ValueKey('syri-now-sky-card'),
+            onTap: () => unawaited(_openSkyNow()),
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+              decoration: BoxDecoration(
+                color: const Color(0xffb9a5ff).withValues(alpha: .10),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: const Color(0xffb9a5ff).withValues(alpha: .42),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.nights_stay_rounded,
+                    color: Color(0xffb9a5ff),
+                    size: 26,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        AppText(
+                          _ui('Qielli tani', 'Sky Now'),
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        AppText(
+                          _ui(
+                            'Hëna $moonPercent% · prek për qiellin mbi ${city.name}',
+                            'Moon $moonPercent% · explore the sky above ${city.name}',
+                          ),
+                          style: const TextStyle(fontSize: 11, color: muted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.open_in_full_rounded,
+                    size: 17,
+                    color: Color(0xffb9a5ff),
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 22),
           AppText(
             _tr('nearbyUpdates').toUpperCase(),

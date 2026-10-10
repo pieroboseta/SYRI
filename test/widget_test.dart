@@ -891,8 +891,18 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('header-syri-now')));
     await tester.pumpAndSettle();
     expect(find.textContaining('SYRI Tani'), findsWidgets);
-    tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+    final skyCard = find.byKey(const ValueKey('syri-now-sky-card'));
+    await tester.scrollUntilVisible(
+      skyCard,
+      220,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(skyCard);
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('syri-now-sky-view')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('close-syri-now-sky')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('syri-now-sky-view')), findsNothing);
 
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();
@@ -912,6 +922,35 @@ void main() {
     expect(find.text('Italiano'), findsNothing);
     expect(find.text('Deutsch'), findsNothing);
   });
+
+  testWidgets(
+    'legend button dismisses horizontally and legend has no duplicate page',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await tester.pumpWidget(const SyriApp(loadData: false));
+      await tester.pumpAndSettle();
+      final territory = find.byKey(const ValueKey('map-category-territory'));
+      await tester.ensureVisible(territory);
+      await tester.tap(territory);
+      await tester.pumpAndSettle();
+      final legend = find.byKey(const ValueKey('map-legend-button'));
+      expect(legend, findsOneWidget);
+      await tester.tap(find.text('Legjenda'));
+      await tester.pumpAndSettle();
+      final landLegend = find.byKey(
+        const ValueKey('reference-legend-land-cover'),
+      );
+      expect(landLegend, findsOneWidget);
+      await tester.tap(landLegend);
+      await tester.pumpAndSettle();
+      expect(find.text('Si lexohet harta'), findsNothing);
+      tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+      await tester.pumpAndSettle();
+      await tester.drag(find.text('Legjenda'), const Offset(-220, 0));
+      await tester.pumpAndSettle();
+      expect(legend, findsNothing);
+    },
+  );
 
   testWidgets('language switch updates reused labels in both directions', (
     tester,
